@@ -1,0 +1,816 @@
+import express, {Express, json} from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import {readFileSync} from 'fs';
+import {ExpressContextFunctionArgument, expressMiddleware} from '@as-integrations/express5';
+import {ApolloArmor} from '@escape.tech/graphql-armor';
+import {ApolloGateway} from '@apollo/gateway';
+import {ApolloServer} from '@apollo/server';
+import { InMemoryLRUCache } from '@apollo/utils.keyvaluecache';
+import {createLogger} from './utils/logger';
+import healthcheckHandler from './handlers/healthcheck';
+import {graphqlConfig, serverConfig} from './utils/environmentVariables';
+import corsOptions from './configuration/corsOptions';
+import helmetOptions from './configuration/helmetOptions';
+import apolloArmorOptions from './configuration/apolloArmorOptions';
+import rateLimitOptions from './configuration/rateLimitOptions';
+import formatError from './configuration/apolloFormatErrorOptions';
+import {createErrorHandler} from './middleware/errorHandler';
+import morgan from 'morgan';
+import path from 'path';
+import {clearTimeout} from 'timers';
+import OpenTelemetryManager from './configuration/openTelemetryConfiguration';
+
+/**
+ * GraphQL Gateway Application Entry Point
+ *
+ * This module implements a production-ready Apollo Federation Gateway with comprehensive
+ * security, monitoring, and operational features. It serves as the unified entry point
+ * for a federated GraphQL architecture.
+ *
+ * Architecture Overview:
+ * - Apollo Federation Gateway: Routes queries to multiple subgraph services
+ * - Express.js HTTP Server: Handles HTTP transport and middleware
+ * - Comprehensive Security: Multiple layers of protection against common attacks
+ * - Operational Excellence: Health checks, logging, metrics, and graceful shutdown
+ * - Environment Awareness: Different behaviours for development vs production
+ *
+ * Key Features:
+ * - Apollo Federation Gateway with security armor
+ * - Request logging and rate limiting
+ * - Graceful shutdown handling
+ * - Development vs Production configurations
+ * - Comprehensive error handling and monitoring
+ * - Health check endpoints for load balancers
+ *
+ * Security Layers:
+ * 1. Network: CORS, Helmet security headers
+ * 2. Application: Rate limiting, input validation
+ * 3. GraphQL: Apollo Armor (query complexity, depth, cost analysis)
+ * 4. Gateway: Subgraph authentication and authorisation
+ * 5. Monitoring: Request logging, error tracking, health checks
+ *
+ * Operational Features:
+ * - Structured logging with Winston
+ * - Health check endpoints for orchestration
+ * - Graceful shutdown for zero-downtime deployments
+ * - Error handling with security-aware information disclosure
+ * - Performance monitoring and metrics collection points
+ */
+
+/**
+ * Application Factory Function
+ *
+ * Creates and configures the Express application with Apollo GraphQL Gateway.
+ * Uses a factory pattern for better testability and dependency injection.
+ *
+ * Factory Pattern Benefits:
+ * - Enables unit testing by allowing mock dependencies
+ * - Separates application creation from server startup
+ * - Allows multiple application instances (useful for testing)
+ * - Provides clear separation of concerns
+ *
+ * Initialisation Order (CRITICAL):
+ * 1. Apollo Server creation and configuration
+ * 2. Apollo Server startup (server.start())
+ * 3. Security middleware (helmet, cors, rate limiting)
+ * 4. Request logging middleware
+ * 5. GraphQL endpoint mounting
+ * 6. Health check endpoints
+ * 7. Global error handler (MUST BE LAST)
+ *
+ * @returns Promise<{app: Express, apolloServer: ApolloServer}> - Configured app and server instances
+ */
+
+export const createApp = async (): Promise<{
+    app: Express,
+    apolloServer: ApolloServer,
+    telemetryManager: OpenTelemetryManager
+}> => {
+    /**
+     * Express Application Initialisation
+     *
+     * Creates the base Express application instance that will host the GraphQL gateway.
+     * All middleware and routes will be mounted in this instance.
+     */
+    const app: Express = express();
+    /**
+     * Logger Initialisation
+     *
+     * Creates a structured logger instance with environment-appropriate log levels.
+     * Used throughout the application for consistent, searchable logging.
+     *
+     * Log Levels by Environment:
+     * - Production: 'warn' - Only warnings and errors
+     * - Development: 'debug' - All log levels including detailed debugging
+     * - Staging: 'info' - General information and above
+     */
+    const logger = createLogger(serverConfig.logLevel);
+
+    /**
+     * OpenTelemetry Initialization (STEP 1 - CRITICAL)
+     *
+     * Initialize OpenTelemetry BEFORE any other application components.
+     * This ensures that all HTTP requests, GraphQL operations, and Express
+     * middleware are properly instrumented from the start.
+     *
+     * Why First?
+     * - Instrumentation's need to patch modules before they're used
+     * - Express and Apollo Server requests must be traced from creation
+     * - Early initialization catches startup errors and dependencies
+     */
+    logger.info('Initializing OpenTelemetry observability...');
+    const telemetryManager = new OpenTelemetryManager();
+    const telemetryResult = telemetryManager.initialize();
+
+    if (telemetryResult.success) {
+        logger.info('OpenTelemetry initialized successfully', {
+            features: telemetryResult.enabledFeatures,
+        });
+    } else {
+        logger.warn('OpenTelemetry initialization failed, continuing without observability', {
+            errors: telemetryResult.errors,
+        });
+    }
+
+
+    /**
+     * Apollo Armor Security Initialization
+     *
+     * Apollo Armor provides comprehensive GraphQL security protection against:
+     * - Query depth attacks (deeply nested queries)
+     * - Query complexity/cost attacks (expensive operations)
+     * - Field suggestion attacks (schema information disclosure)
+     * - Alias flooding attacks (resource exhaustion)
+     * - Directive flooding attacks (parser exhaustion)
+     * - Token flooding attacks (memory exhaustion)
+     *
+     * Security Architecture:
+     * - Validation Rules: Applied during GraphQL query validation phase
+     * - Plugins: Integrated into Apollo Server's plugin architecture
+     * - Pre-execution: Security checks happen before query execution
+     * - Configurable: All limits can be tuned via environment variables
+     *
+     * Performance Impact: Minimal - security checks happen during validation,
+     * not execution, so they don't slow down actual query processing.
+     */
+    const armour = new ApolloArmor(apolloArmorOptions);
+    const protection = armour.protect();
+
+    /**
+     * Supergraph Schema Loading
+     *
+     * Loads the federated schema definition that describes how to route queries
+     * to the appropriate subgraph services. This file is typically generated by
+     * Apollo Rover CLI during the CI/CD process.
+     *
+     * Supergraph SDL (Schema Definition Language):
+     * - Contains the complete federated schema
+     * - Includes routing information for each subgraph
+     * - Defines entity relationships across services
+     * - Generated from individual subgraph schemas
+     *
+     * Production Considerations:
+     * - File should be generated during deployment
+     * - Changes require gateway restart
+     * - Version control this file for rollback capability
+     * - Monitor file size and complexity
+     *
+     * Error Handling: File read failures will crash the application at startup,
+     * which is the desired behaviour (fail-fast principle).
+     */
+    const supergraphSdl = readFileSync(path.join(__dirname, '../supergraph.graphql'), 'utf-8')
+
+    /**
+     * Apollo Gateway Initialisation
+     *
+     * Creates the Apollo Federation Gateway that handles:
+     * - Query planning: Determines which subgraphs to query
+     * - Query execution: Coordinates requests to multiple subgraphs
+     * - Result composition: Merges responses from multiple services
+     * - Entity resolution: Handles federated entity relationships
+     *
+     * Gateway Responsibilities:
+     * - Parse incoming GraphQL queries
+     * - Create execution plans for federated queries
+     * - Route queries to appropriate subgraph services
+     * - Handle authentication/authorisation for subgraph requests
+     * - Merge and deduplicate responses
+     * - Handle partial failures gracefully
+     *
+     * Performance Considerations:
+     * - Query planning is cached for repeated queries
+     * - Parallel execution of independent subgraph requests
+     * - Connection pooling to subgraph services
+     * - Intelligent batching and deduplication
+     */
+    const gateway: ApolloGateway = new ApolloGateway({
+        supergraphSdl: supergraphSdl,
+    });
+
+    /**
+     * Apollo Server Configuration
+     *
+     * Creates the Apollo GraphQL Server with comprehensive security and development features.
+     * The server handles GraphQL query parsing, validation, execution, and response formatting.
+     *
+     * Configuration Highlights:
+     * - Gateway Integration: Uses Apollo Federation Gateway for query routing
+     * - Security Plugins: Apollo Armor protection plugins
+     * - Environment Awareness: Different behaviours for development vs production
+     * - Error Handling: Custom error formatting with security considerations
+     * - Performance Features: Batched requests, query caching
+     */
+        // NB: CWE-400: Uncontrolled Resource Consumption
+        // Denial of Service through Nested GraphQL Queries
+        // Issue has been addressed by Apollo Armour `maxDepth`
+    const server: ApolloServer = new ApolloServer({
+        /**
+         * Gateway Integration
+         *
+         * Integrates the Apollo Federation Gateway with the Apollo Server.
+         * This enables the server to handle federated GraphQL queries.
+         */
+        gateway: gateway,
+        /**
+         * Apollo Server Query Result Caching
+         *
+         * Implements in-memory LRU (Least Recently Used) caching for GraphQL query results.
+         * Provides significant performance improvements by caching expensive query results.
+         *
+         * Cache Strategy: LRU (Least Recently Used)
+         * - Most recently accessed items stay in cache
+         * - Least recently used items are evicted when cache is full
+         * - Optimal for workloads with locality of reference
+         *
+         * Performance Benefits:
+         * - Reduces database/subgraph query load
+         * - Improves response times for repeated queries
+         * - Decreases resource utilisation across federated services
+         * - Better user experience with faster API responses
+         *
+         * Memory Trade-offs:
+         * - Uses heap memory to store cached results
+         * - Memory usage grows with cache size and result complexity
+         * - Can improve or hurt performance depending on query patterns
+         */
+        cache: new InMemoryLRUCache({
+            /**
+             * Maximum Cache Size: 100 entries
+             *
+             * Controls the maximum number of cached query results.
+             * When the limit is reached, least recently used entries are evicted.
+             *
+             * Sizing Considerations:
+             * - Each entry stores: a query + variables + result + metadata
+             * - Typical entry size: 1KB - 100KB depending on query complexity
+             * - Total memory usage: ~100KB - 10MB for this configuration
+             * - Should be tuned based on available memory and query patterns
+             *
+             * Production Tuning Guidelines:
+             * - Start conservative (100-500 entries)
+             * - Monitor cache hit rates and memory usage
+             * - Increase if hit rates are good and memory allows
+             * - Consider query complexity in your calculations
+             *
+             * Example Memory Calculation:
+             * - 100 entries × 50KB average = ~5MB memory usage
+             * - Monitor actual usage with process.memoryUsage()
+             */
+            maxSize: 100,
+            /**
+             * Time To Live (TTL): 60 seconds
+             *
+             * Maximum age of cached entries before automatic expiration.
+             * Ensures data freshness while maintaining performance benefits.
+             *
+             * TTL Strategy Considerations:
+             * - Shorter TTL: Fresher data, more cache misses, higher load
+             * - Longer TTL: Better performance, potentially stale data
+             * - Should match your data consistency requirements
+             *
+             * Data Type Guidelines:
+             * - Static/reference data: 300-3600 seconds (5 minutes - 1 hour)
+             * - User-specific data: 60-300 seconds (1-5 minutes)
+             * - Real-time data: 10-60 seconds or no caching
+             * - Analytics data: 60-900 seconds (1-15 minutes)
+             *
+             * Federation Considerations:
+             * - Different subgraphs may have different data volatility
+             * - Cache TTL should match the fastest-changing data in the query
+             * - Consider cache invalidation strategies for critical updates
+             *
+             * Current Setting Rationale:
+             * - 60 seconds provide a balance between performance with data freshness
+             * - Suitable for most user-facing applications
+             * - Short enough to prevent stale data issues
+             * - Long enough to provide meaningful performance benefits
+             */
+            ttl: 60
+        }),
+        /**
+         * Security Plugins Integration
+         *
+         * Integrates Apollo Armor security plugins that provide:
+         * - Query complexity analysis and limiting
+         * - Query depth limiting
+         * - Alias and directive flooding protection
+         * - Token count limiting
+         *
+         * These plugins are executed during the query validation phase,
+         * before any query execution begins.
+         */
+        plugins: [...protection.plugins],
+        /**
+         * Security Validation Rules
+         *
+         * Applies Apollo Armor validation rules during GraphQL query validation.
+         * These rules analyse incoming queries for potential security threats
+         * and reject dangerous queries before execution.
+         */
+        validationRules: [...protection.validationRules],
+        /**
+         * GraphQL Introspection Control
+         *
+         * Controls whether clients can query the GraphQL schema structure.
+         *
+         * Security Implications:
+         * - Production: Should be disabled to prevent schema enumeration
+         * - Development: Enabled for tooling (GraphQL Playground, Apollo Studio)
+         * - Staging: Often enabled for testing and integration
+         *
+         * When enabled, clients can discover:
+         * - Available queries, mutations, and subscriptions
+         * - Field types and relationships
+         * - Documentation and descriptions
+         * - Deprecated fields and reasons
+         */
+        introspection: graphqlConfig.enableIntrospection,
+        /**
+         * Error Stack Trace Control
+         *
+         * Controls whether detailed stack traces are included in error responses.
+         *
+         * Security Trade-off:
+         * - Production: Disabled to prevent information disclosure
+         * - Development: Enabled for debugging efficiency
+         *
+         * Information Disclosure Risk:
+         * - Stack traces can reveal internal application structure
+         * - File paths may expose deployment information
+         * - Function names can reveal business logic
+         */
+        includeStacktraceInErrorResponses: serverConfig.nodeEnv !== 'production',
+        /**
+         * Custom Error Formatting
+         *
+         * Uses custom error formatter that:
+         * - Sanitizes error messages in production
+         * - Logs all errors for monitoring
+         * - Provides structured error responses
+         * - Prevents information disclosure
+         */
+        formatError: formatError,
+        /**
+         * Batched HTTP Requests Support
+         *
+         * Allows clients to send multiple GraphQL operations in a single HTTP request.
+         *
+         * Benefits:
+         * - Reduced HTTP overhead
+         * - Better performance for complex UIs
+         * - Fewer network round trips
+         *
+         * Security Considerations:
+         * - Can complicate rate limiting
+         * - May enable more sophisticated attacks
+         * - Requires careful monitoring
+         *
+         * Disabled by default for security; enable only if needed.
+         */
+        allowBatchedHttpRequests: graphqlConfig.allowBatchedRequests,
+    });
+
+    /**
+     * Apollo Server Startup
+     *
+     * CRITICAL: Apollo Server must be started before applying Express middleware.
+     * This initialises the GraphQL schema, validates configuration, and prepares
+     * the server to handle GraphQL requests.
+     *
+     * Startup Process:
+     * 1. Schema composition and validation
+     * 2. Plugin initialisation
+     * 3. Gateway service discovery (if using managed federation)
+     * 4. Internal caches initialisation
+     * 5. Health check endpoints activation
+     *
+     * Failure Handling: Startup failures will throw exceptions and prevent
+     * the application from starting, which is the desired behaviour.
+     */
+    await server.start();
+
+    /**
+     * Security Middleware Layer
+     *
+     * Applied in a carefully ordered sequence to provide comprehensive security.
+     * Order matters: some middleware depends on headers set by previous middleware.
+     *
+     * Security Architecture:
+     * 1. Helmet: Security headers to prevent common web vulnerabilities
+     * 2. CORS: Cross-origin request filtering and access control
+     * 3. Rate Limiting: Request frequency limiting to prevent abuse
+     *
+     * Each layer provides different types of protection, and they work together
+     * to create a defence-in-depth security posture.
+     */
+
+    /**
+     * Helmet Security Headers Middleware
+     *
+     * Sets various HTTP security headers to protect against common web vulnerabilities:
+     * - Content Security Policy (CSP): Prevents XSS attacks
+     * - X-Frame-Options: Prevents clickjacking
+     * - X-Content-Type-Options: Prevents MIME sniffing
+     * - Referrer-Policy: Controls referrer information
+     * - Strict-Transport-Security: Enforces HTTPS
+     *
+     * Applied first to ensure security headers are set on all responses.
+     */
+    app.use(helmet(helmetOptions));
+    /**
+     * CORS (Cross-Origin Resource Sharing) Middleware
+     *
+     * Controls which web origins can access the GraphQL API from browsers.
+     * Critical for preventing unauthorised cross-origin requests.
+     *
+     * Protection Against:
+     * - Cross-Site Request Forgery (CSRF)
+     * - Unauthorised API access from malicious websites
+     * - Data exfiltration attacks
+     *
+     * Configuration includes:
+     * - Allowed origins (domain whitelist)
+     * - Allowed methods (GET, POST, OPTIONS)
+     * - Allowed headers (Content-Type, Authorization)
+     * - Credentials support for authenticated requests
+     */
+    app.use(cors(corsOptions));
+    /**
+     * Rate Limiting Middleware
+     *
+     * Implements request frequency limiting to prevent abuse and DoS attacks.
+     * Applied after CORS to ensure rate limiting respects origin policies.
+     *
+     * Protection Against:
+     * - Brute force attacks
+     * - Denial of Service (DoS) attacks
+     * - API abuse and scraping
+     * - Resource exhaustion
+     *
+     * Configuration:
+     * - Request window: Time period for counting requests
+     * - Request limit: Maximum requests per window per IP
+     * - Error responses: Structured rate limit exceeded messages
+     */
+    app.use(rateLimit(rateLimitOptions))
+
+    /**
+     * HTTP Request Logging Middleware
+     *
+     * Logs all HTTP requests using Morgan middleware integrated with Winston logger.
+     * Provides comprehensive request/response logging for monitoring and debugging.
+     *
+     * Logged Information:
+     * - HTTP method and URL
+     * - Response status code and size
+     * - Response time
+     * - User agent and referrer
+     * - Client IP address
+     *
+     * Security Benefits:
+     * - Audit trail for security analysis
+     * - Attack pattern detection
+     * - Performance monitoring
+     * - Compliance logging
+     *
+     * Performance Considerations:
+     * - Async logging to prevent blocking
+     * - Structured JSON format for log aggregation
+     * - Configurable log levels by environment
+     */
+    app.use(morgan('combined', {
+        stream: {
+            write: (message: string) => logger.http(message.trim())
+        },
+    }));
+
+    /**
+     * GraphQL Endpoint Configuration
+     *
+     * Mounts the Apollo GraphQL Server on the /graphql endpoint.
+     * This is the primary API endpoint that handles all GraphQL queries and mutations.
+     *
+     * Endpoint Features:
+     * - POST requests for GraphQL operations
+     * - GET requests for simple queries (if enabled)
+     * - Context injection for authentication and request metadata
+     * - Automatic parsing of GraphQL requests
+     * - Integration with an Express middleware chain
+     *
+     * Context Injection:
+     * - Provides access to the Express request object in GraphQL resolvers
+     * - Enables authentication, authorisation, and request tracking
+     * - Allows custom context enrichment (user data, permissions, etc.)
+     */
+    app.use('/graphql', json(), expressMiddleware(server, {
+        context: async ({ req }: ExpressContextFunctionArgument): Promise<{token:string | undefined}> => ({
+            token: req.headers.authorization,
+        })
+    }));
+
+    /**
+     * Health Check Endpoint
+     *
+     * Provides service health information for load balancers, orchestration platforms,
+     * and monitoring systems. Critical for production deployments.
+     *
+     * Health Check Features:
+     * - Service status and uptime information
+     * - Environment and version identification
+     * - Memory usage metrics (development only)
+     * - Dependency health status (future enhancement)
+     *
+     * Operational Benefits:
+     * - Load balancer health checks
+     * - Kubernetes readiness/liveness probes
+     * - Monitoring system integration
+     * - Incident response and troubleshooting
+     *
+     * Security Considerations:
+     * - No authentication required (public endpoint)
+     * - Limited information disclosure in production
+     * - Rate limiting applies to prevent abuse
+     */
+    app.get('/healthcheck', healthcheckHandler);
+
+    /**
+     * OpenTelemetry Status Endpoint (Development Only)
+     *
+     * Provides detailed OpenTelemetry status for debugging.
+     */
+    if (serverConfig.nodeEnv !== 'production') {
+        app.get('/telemetry-status', (req, res) => {
+            const status = telemetryManager.getStatus();
+            res.json({
+                openTelemetry: status,
+                timestamp: new Date().toISOString(),
+            });
+        });
+    }
+
+
+    /**
+     * Global Error Handler Middleware
+     *
+     * CRITICAL: Must be the last middleware in the chain.
+     * Catches any unhandled errors from previous middleware or routes.
+     *
+     * Error Handler Responsibilities:
+     * - Catch all unhandled Express errors
+     * - Log errors with comprehensive context
+     * - Return safe, structured error responses
+     * - Prevent information disclosure in production
+     * - Maintain service availability despite errors
+     *
+     * Security Features:
+     * - Environment-aware error disclosure
+     * - Comprehensive server-side error logging
+     * - Attack pattern detection and logging
+     * - Structured error responses for clients
+     *
+     * Note: GraphQL errors are handled separately by Apollo Server's
+     * formatError function and don't reach this middleware.
+     */
+    app.use(createErrorHandler(logger));
+    /**
+     * Application Startup Complete
+     *
+     * Returns the fully configured Express application and Apollo Server instances.
+     * The application is ready to handle requests, but the HTTP server hasn't started yet.
+     */
+    return {app, apolloServer: server, telemetryManager: telemetryManager};
+}
+
+/**
+ * Server Startup Function
+ *
+ * Starts the HTTP server and sets up production-ready operational features:
+ * - HTTP server startup with configured port
+ * - Graceful shutdown handling for zero-downtime deployments
+ * - Process signal handling for container orchestration
+ * - Unhandled error catching for process stability
+ *
+ * Production Features:
+ * - Graceful shutdown: Allows in-flight requests to complete
+ * - Signal handling: Responds to SIGTERM/SIGINT from orchestrators
+ * - Error handling: Prevents silent failures in production
+ * - Logging: Comprehensive startup and shutdown logging
+ */
+export const startServer = async (): Promise<void> => {
+    const logger = createLogger(serverConfig.logLevel);
+    let telemetryManager: OpenTelemetryManager | null = null;
+    try {
+        /**
+         * Application Creation
+         *
+         * Creates the fully configured Express application and Apollo Server.
+         * Any configuration errors will be thrown here before the server startup.
+         */
+        const {app, apolloServer, telemetryManager: appTelemetryManager} = await createApp();
+        telemetryManager = appTelemetryManager;
+
+        /**
+         * HTTP Server Startup
+         *
+         * Only starts the HTTP server in non-test environments.
+         * This allows Jest tests to create the application without starting a server.
+         *
+         * Test Environment Handling:
+         * - Jest tests can import and test the application factory
+         * - Supertest can create test servers as needed
+         * - No port conflicts during test execution
+         */
+        if (serverConfig.nodeEnv !== 'test') {
+            /**
+             * HTTP Server Creation and Startup
+             *
+             * Creates the HTTP server and starts listening on the configured port.
+             * Logs comprehensive startup information for operational visibility.
+             */
+            const server = app.listen(serverConfig.port, (): void => {
+                logger.info('Server started successfully', {
+                    port: serverConfig.port,
+                    env: serverConfig.nodeEnv,
+                    service: `${serverConfig.serviceName}@${serverConfig.serviceVersion}`,
+                    graphql: '/graphql',
+                    healthcheck: '/healthcheck',
+                    observability: telemetryManager?.getStatus() || { enabled: false },
+                });
+            });
+
+            /**
+             * Graceful Shutdown Handler
+             *
+             * Implements graceful shutdown for zero-downtime deployments.
+             * Ensures in-flight requests are complete before process termination.
+             *
+             * Shutdown Sequence:
+             * 1. Stop accepting new requests (Apollo Server shutdown)
+             * 2. Wait for existing requests to complete
+             * 3. Close HTTP server connections
+             * 4. Exit process with success code
+             *
+             * This is critical for:
+             * - Zero-downtime deployments
+             * - Container orchestration (Kubernetes, Docker)
+             * - Load balancer health check compliance
+             * - Data consistency and user experience
+             */
+            const gracefulShutdown = async (signal: string) => {
+                logger.info(`${signal} received. Shutting down gracefully.`);
+
+                const shutdownTimeout = setTimeout(() => {
+                    logger.error('Forced shutdown due to timeout');
+                    process.exit(1);
+                }, 30000);
+
+                try {
+                    /**
+                     * Shutdown Order:
+                     * 1. Apollo Server (stop accepting GraphQL requests)
+                     * 2. HTTP Server (stop accepting HTTP requests)
+                     * 3. OpenTelemetry SDK (flush remaining telemetry data)
+                     */
+
+                    // 1. Apollo Server Shutdown
+                    logger.info('Shutting down Apollo Server...');
+                    await apolloServer.stop();
+
+                    // 2. HTTP Server Shutdown
+                    logger.info('Shutting down HTTP Server...');
+                    server.close(async () => {
+                        // 3. OpenTelemetry Shutdown (inside server.close callback)
+                        if (telemetryManager) {
+                            logger.info('Shutting down OpenTelemetry...');
+                            await telemetryManager.shutdown();
+                        }
+
+                        clearTimeout(shutdownTimeout);
+                        logger.info('Server shut down complete.');
+                        process.exit(0);
+                    });
+
+                } catch (error) {
+                    logger.error('Error during graceful shutdown', {
+                        error: error instanceof Error ? error.message : String(error),
+                    });
+                    clearTimeout(shutdownTimeout);
+                    process.exit(1);
+                }
+            };
+
+            /**
+             * Process Signal Handlers
+             *
+             * Handles termination signals from container orchestrators and process managers.
+             *
+             * Signal Types:
+             * - SIGTERM: Graceful termination request (preferred by orchestrators)
+             * - SIGINT: Interrupt signal (Ctrl+C in development)
+             *
+             * Container Orchestration:
+             * - Kubernetes sends SIGTERM before SIGKILL
+             * - Docker sends SIGTERM on container stop
+             * - Process managers use SIGTERM for graceful restarts
+             */
+            process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+            process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+            /**
+             * Unhandled Error Handlers
+             *
+             * Catches unhandled promise rejections and uncaught exceptions.
+             * Critical for preventing silent failures in production.
+             *
+             * Error Types:
+             * - unhandledRejection: Promise rejections without .catch()
+             * - uncaughtException: Synchronous errors not caught by try/catch
+             *
+             * Production Behavior:
+             * - Log comprehensive error information
+             * - Exit process to allow orchestrator restart
+             * - Prevent undefined application state
+             *
+             * These are last-resort error handlers; proper error handling
+             * should prevent these from being triggered.
+             */
+            process.on('unhandledRejection', (reason, promise) => {
+                logger.error('Unhandled Rejection', { promise: promise, reason: reason });
+                process.exit(1);
+            });
+
+            process.on('uncaughtException', (error) => {
+                logger.error('Uncaught Exception:', { error: error.message, stack: error.stack });
+                process.exit(1);
+            });
+
+        }
+    } catch (err) {
+        /**
+         * Startup Error Handling
+         *
+         * Handles any errors that occur during application startup.
+         * Logs comprehensive error information and exits with failure code.
+         *
+         * Common Startup Errors:
+         * - Configuration validation failures
+         * - File system errors (supergraph.graphql not found)
+         * - Network errors (unable to bind to port)
+         * - Apollo Server startup failures
+         */
+        logger.error('Failed to start server', {
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined
+        });
+        // Ensure OpenTelemetry is shut down even on startup failure
+        if (telemetryManager) {
+            try {
+                await telemetryManager.shutdown();
+            } catch (shutdownError) {
+                logger.error('Error shutting down OpenTelemetry after startup failure', {
+                    error: shutdownError instanceof Error ? shutdownError.message : String(shutdownError),
+                });
+            }
+        }
+        process.exit(1);
+    }
+};
+
+/**
+ * Direct Execution Handler
+ *
+ * Starts the server when the file is executed directly (not imported).
+ * This allows the module to be imported for testing without starting a server.
+ *
+ * Usage Patterns:
+ * - Direct execution: `node dist/app.js` or `ts-node src/app.ts`
+ * - Import for testing: `import { createApp } from './app'`
+ */
+if (require.main === module) {
+    startServer().then(() => {
+        const logger = createLogger(serverConfig.logLevel);
+        logger.info('Server process ended.');
+    });
+}
