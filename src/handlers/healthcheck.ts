@@ -23,10 +23,7 @@
  */
 
 import {Request, Response} from 'express';
-import {serverConfig} from '../utils/environmentVariables';
-import {createLogger} from '../utils/logger';
-
-const logger = createLogger(serverConfig.logLevel);
+import {serverConfiguration} from '../managers/environmentManager';
 
 /**
  * Health Check Response Interface
@@ -114,7 +111,7 @@ const healthcheck = (req: Request, res: Response) => {
          * Critical for multienvironment deployments to prevent confusion.
          * Helps operations teams verify they're checking the correct environment.
          */
-        environment: serverConfig.nodeEnv,
+        environment: serverConfiguration.nodeEnv,
         /**
          * Service Identification
          *
@@ -125,8 +122,8 @@ const healthcheck = (req: Request, res: Response) => {
          * - Incident response and debugging
          */
         service: {
-            name: serverConfig.serviceName,
-            version: serverConfig.serviceVersion,
+            name: serverConfiguration.serviceName,
+            version: serverConfiguration.serviceVersion,
         },
     }
     /**
@@ -140,7 +137,7 @@ const healthcheck = (req: Request, res: Response) => {
      * - Production systems should use dedicated monitoring tools
      * - Development teams need this data for optimisation
      */
-    if (serverConfig.nodeEnv !== 'production') {
+    if (serverConfiguration.nodeEnv !== 'production') {
         body.memory = process.memoryUsage();
     }
 

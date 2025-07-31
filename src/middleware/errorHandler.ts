@@ -29,7 +29,7 @@
  */
 
 import express from 'express';
-import {serverConfig} from '../utils/environmentVariables';
+import {serverConfiguration} from '../managers/environmentManager';
 
 /**
  * Error Handler Factory Function
@@ -73,9 +73,10 @@ export const createErrorHandler = (logger: any) => {
         });
 
         res.status(500).json({
-            error: serverConfig.nodeEnv === 'production'
+            error: serverConfiguration.nodeEnv === 'production'
                 ? 'Internal Server Error'
                 : err.message
         });
+        next();
     }
 };
