@@ -59,36 +59,58 @@ A production-ready Apollo Federation Gateway service built with Express.js and T
 
 The application uses environment-based configuration with Zod validation. Key configuration areas:
 
-#### Server Configuration
-```shell script
-  NODE_ENV=development          # Environment: development, staging, production
-  PORT=4000                    # Server port
-  SERVICE_NAME=gateway-api     # Service identifier
-  SERVICE_VERSION=1.0.0        # Service version
-  LOG_LEVEL=info              # Logging level: error, warn, info, debug
-```
+| Variable Name | Type | Default Value | Enum Options | Description |
+|--------------|------|---------------|--------------|-------------|
+| **Server Configuration** |
+| `NODE_ENV` | enum | `production` | `production`, `candidate`, `uat`, `development`, `test` | Controls environment-specific behavior throughout the application |
+| `PORT` | string | `8080` | - | HTTP server port number |
+| `LOG_LEVEL` | enum | `warn` | `error`, `warn`, `info`, `http`, `debug` | Winston logging level for application verbosity |
+| `SERVICE_NAME` | string | *required* | - | Unique service identifier for monitoring and logging |
+| `SERVICE_VERSION` | string | *required* | - | Version identifier for deployment tracking |
+| **CORS Configuration** |
+| `CORS_ALLOWED_DOMAIN` | string | *required* | - | Domain authorized for cross-origin requests |
+| **GraphQL Configuration** |
+| `ENABLE_GRAPHQL_PLAYGROUND` | boolean | `false` | `true`, `false` | Enables GraphQL Playground web interface |
+| `ENABLE_INTROSPECTION` | boolean | `false` | `true`, `false` | Allows clients to query GraphQL schema structure |
+| `ALLOWED_BATCHED_REQUESTS` | boolean | `false` | `true`, `false` | Enables multiple GraphQL operations in single HTTP request |
+| **Apollo Armor Security** |
+| `ENABLE_BLOCK_FIELD_SUGGESTION` | boolean | `true` | `true`, `false` | Prevents GraphQL field name suggestions |
+| `BLOCK_FIELD_SUGGESTION_MASK` | string | `<[REDACTED]>` | - | Replacement text for blocked field suggestions |
+| `ENABLE_COST_LIMIT` | boolean | `true` | `true`, `false` | Enables query cost analysis and limiting |
+| `COST_LIMIT_MAX_COST` | number | `5000` | - | Maximum computational cost allowed per query |
+| `COST_LIMIT_OBJECT_COST` | number | `2` | - | Base cost assigned to object fields |
+| `COST_LIMIT_SCALAR_COST` | number | `1` | - | Base cost assigned to scalar fields |
+| `COST_LIMIT_DEPTH_COST_FACTOR` | number | `1.5` | - | Multiplication factor for query depth cost |
+| `COST_LIMIT_IGNORE_INTROSPECTION` | boolean | `true` | `true`, `false` | Bypasses cost analysis for introspection queries |
+| `ENABLE_MAX_DEPTH` | boolean | `true` | `true`, `false` | Limits GraphQL query nesting depth |
+| `MAX_DEPTH_LIMIT` | number | `10` | - | Maximum allowed query nesting level |
+| `MAX_DEPTH_FLATTEN_FRAGMENTS` | boolean | `false` | `true`, `false` | Includes fragment depth in calculation |
+| `ENABLE_MAX_ALIASES` | boolean | `true` | `true`, `false` | Limits number of aliases per query |
+| `MAX_ALIASES_LIMIT` | number | `10` | - | Maximum field aliases allowed per query |
+| `ENABLE_MAX_DIRECTIVES` | boolean | `true` | `true`, `false` | Limits number of directives per query |
+| `MAX_DIRECTIVES_LIMIT` | number | `50` | - | Maximum directives allowed per query |
+| `ENABLE_MAX_TOKENS` | boolean | `true` | `true`, `false` | Limits total tokens in query |
+| `MAX_TOKENS_LIMIT` | number | `1000` | - | Maximum lexical tokens per query |
+| **Rate Limiting** |
+| `RATE_LIMIT_WINDOW_MS` | number | `900000` | - | Time window for rate limiting (milliseconds) |
+| `RATE_LIMIT_MAX` | number | `100` | - | Maximum requests per IP per window |
+| **OpenTelemetry Configuration** |
+| `ENABLE_OPEN_TELEMETRY_METRICS` | boolean | `false` | `true`, `false` | Enables metrics collection and export |
+| `ENABLE_OPEN_TELEMETRY_TRACES` | boolean | `false` | `true`, `false` | Enables distributed tracing collection |
+| `OPEN_TELEMETRY_SERVICE_NAMESPACE` | string | `graphql` | - | Service namespace for telemetry grouping |
+| `OPEN_TELEMETRY_TRACES_HEADERS` | string (JSON) | `{}` | - | HTTP headers for trace export authentication |
+| `OPEN_TELEMETRY_METRICS_HEADERS` | string (JSON) | `{}` | - | HTTP headers for metrics export authentication |
+| `OPEN_TELEMETRY_TRACES_ENDPOINT_URL` | string | *optional* | - | URL for trace collection endpoint |
+| `OPEN_TELEMETRY_METRICS_ENDPOINT_URL` | string | *optional* | - | URL for metrics collection endpoint |
+| `OPEN_TELEMETRY_SAMPLING_RATE` | number | `1.0` | `0.0` - `1.0` | Fraction of traces to sample (0.0 = 0%, 1.0 = 100%) |
 
+## Notes
 
-#### GraphQL Configuration
-```shell script
-  ENABLE_INTROSPECTION=true    # Enable GraphQL schema introspection
-  ALLOW_BATCHED_REQUESTS=false # Allow batched GraphQL requests
-```
-
-
-#### Rate Limiting
-```shell script
-  RATE_LIMIT_WINDOW_MS=900000  # Rate limit window (15 minutes)
-  RATE_LIMIT_MAX=100          # Max requests per window per IP
-```
-
-
-#### OpenTelemetry (Optional)
-```shell script
-  OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
-  OTEL_SERVICE_NAME=gateway-api
-```
-
+- **Required variables** must be set or the application will fail to start
+- **Boolean variables** accept string values `'true'` or `'false'` and are transformed to actual booleans
+- **Number variables** accept string values and are transformed to numbers with validation
+- **JSON variables** accept JSON string format for complex headers configuration
+- **Optional variables** can be omitted; features will be disabled if related URLs are not provided
 
 ### Supergraph Configuration
 
@@ -208,12 +230,9 @@ Configurable cross-origin resource sharing with:
 - **OpenTelemetry Integration** - Distributed tracing
 - **Express Instrumentation** - HTTP request metrics
 - **GraphQL Instrumentation** - Query performance tracking
-- **Custom Metrics** - Business-specific measurements
 
 ### Health Monitoring
 - **Liveness Probes** - Process health status
-- **Readiness Probes** - Service readiness status
-- **Dependency Health** - Subgraph service status
 - **Performance Metrics** - Response times and throughput
 
 ## 🚢 Deployment
