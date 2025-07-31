@@ -23,11 +23,10 @@
  * - Consider implementing query-specific rate limits for expensive operations
  */
 
-import {rateLimitConfig} from '../utils/environmentVariables';
-import {serverConfig} from '../utils/environmentVariables';
-import {createLogger} from '../utils/logger';
+import {rateLimitConfiguration, serverConfiguration} from '../managers/environmentManager';
+import {createLogger} from '../managers/loggerManager';
 
-const logger = createLogger(serverConfig.logLevel);
+const logger = createLogger(serverConfiguration.logLevel);
 
 /**
  * Enhanced Rate Limiting Configuration
@@ -54,7 +53,7 @@ const rateLimitOptions = {
      *
      * Configured via: RATE_LIMIT_WINDOW_MS environment variable
      */
-    windowMs: rateLimitConfig.rateLimitWindow,
+    windowMs: rateLimitConfiguration.rateLimitWindow,
     /**
      * Maximum Requests Per Window
      *
@@ -74,7 +73,7 @@ const rateLimitOptions = {
      *
      * Configured via: RATE_LIMIT_MAX environment variable
      */
-    limit: rateLimitConfig.rateLimitMax,
+    limit: rateLimitConfiguration.rateLimitMax,
 
     /**
      * Rate Limit Response Headers
@@ -115,9 +114,9 @@ const rateLimitOptions = {
                 type: 'RateLimitError',
                 // Provide helpful information for legitimate clients
                 details: {
-                    limit: rateLimitConfig.rateLimitMax,
-                    windowMs: rateLimitConfig.rateLimitWindow,
-                    retryAfter: Math.ceil(rateLimitConfig.rateLimitWindow / 1000), // seconds
+                    limit: rateLimitConfiguration.rateLimitMax,
+                    windowMs: rateLimitConfiguration.rateLimitWindow,
+                    retryAfter: Math.ceil(rateLimitConfiguration.rateLimitWindow / 1000), // seconds
                 },
             }
         });

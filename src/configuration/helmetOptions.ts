@@ -19,7 +19,7 @@
  */
 
 import {HelmetOptions} from 'helmet';
-import {graphqlConfig} from '../utils/environmentVariables';
+import {graphqlConfiguration} from '../managers/environmentManager';
 
 /**
  * Comprehensive Helmet Security Configuration
@@ -37,7 +37,7 @@ const helmetOptions: Readonly<HelmetOptions> | undefined = {
      * Development: Disabled when GraphQL Playground is enabled (needs embedding)
      * Production: Disabled for API-only services (no embedding needed)
      */
-    crossOriginEmbedderPolicy: graphqlConfig.enableGraphQLPlayground,
+    crossOriginEmbedderPolicy: graphqlConfiguration.enablePlayground,
 
     /**
      * Hide X-Powered-By Header
@@ -72,12 +72,12 @@ const helmetOptions: Readonly<HelmetOptions> | undefined = {
             defaultSrc: ["'self'"],
 
             // Script execution policy
-            scriptSrc: graphqlConfig.enableGraphQLPlayground
+            scriptSrc: graphqlConfiguration.enablePlayground
                 ? ["'self'", "'unsafe-inline'", "'unsafe-eval'"] // Development: Allow playground scripts
                 : ["'self'"], // Production: Only same-origin scripts
 
             // CSS/styling policy
-            styleSrc: graphqlConfig.enableGraphQLPlayground
+            styleSrc: graphqlConfiguration.enablePlayground
                 ? ["'self'", "'unsafe-inline'"] // Development: Allow playground styles
                 : ["'self'"], // Production: Only same-origin styles
 

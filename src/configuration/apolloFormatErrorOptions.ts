@@ -17,10 +17,10 @@
  * - Gateway composition errors
  */
 
-import {createLogger} from '../utils/logger';
-import {serverConfig} from '../utils/environmentVariables';
+import {createLogger} from '../managers/loggerManager';
+import {serverConfiguration} from '../managers/environmentManager';
 
-const logger = createLogger(serverConfig.logLevel);
+const logger = createLogger(serverConfiguration.logLevel);
 
 /**
  * Custom GraphQL Error Formatter
@@ -49,13 +49,13 @@ const formatError = (err: any) => {
         source: err.source?.body, // Original query (be careful with sensitive data)
         stack: err.stack, // Full stack trace for debugging
         // Additional metadata for production debugging
-        service: serverConfig.serviceName,
-        environment: serverConfig.nodeEnv,
+        service: serverConfiguration.serviceName,
+        environment: serverConfiguration.nodeEnv,
     });
 
     // Development Environment: Return full error details
     // This helps developers debug issues quickly during development
-    if (serverConfig.nodeEnv !== 'production') return err;
+    if (serverConfiguration.nodeEnv !== 'production') return err;
 
     // Production Environment: Return sanitized error
     // Only expose information that is safe for public consumption

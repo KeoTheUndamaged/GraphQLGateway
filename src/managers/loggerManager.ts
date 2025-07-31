@@ -11,18 +11,25 @@
  * - http: 3 - HTTP request/response logging
  * - debug: 4 - Detailed debugging information
  */
-
 import winston from 'winston';
-import {serverConfig} from './environmentVariables';
 
-class Logger {
-    private readonly logLevel: string;
+export interface Logger {
+    error: (message: string, metadata?: {}) => winston.Logger;
+    warn: (message: string, metadata?: {}) => winston.Logger;
+    info: (message: string, metadata?: {}) => winston.Logger;
+    http: (message: string, metadata?: {}) => winston.Logger;
+    debug: (message: string, metadata?: {}) => winston.Logger;
+    stream: { write: (message: string) => winston.Logger }
+}
+
+class LoggerManager {
+    private readonly level: string;
     private readonly levels: any;
-    private readonly logFormat: winston.Logform.Format;
+    private readonly format: winston.Logform.Format;
     private readonly transports: winston.transport[];
     private readonly logger: winston.Logger;
 
-    constructor(logLevel: string = serverConfig.logLevel) {
+    constructor(level: string) {
         // Custom log levels optimised for API services
         this.levels = {
             error: 0, // Critical errors
@@ -31,28 +38,31 @@ class Logger {
             http: 3, // HTTP requests
             debug: 4, // Debug info
         }
-        this.logLevel = logLevel;
+        this.level = level;
 
         // Structured JSON logging format for production log aggregation
-        this.logFormat = winston.format.combine(
-            winston.format.timestamp({format: 'YYYY-MM-DD HH:mm:ss.SSS'}),
-            winston.format.errors({stack: true}), // Include stack traces for errors
+        this.format = winston.format.combine(
+            winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+            winston.format.errors({ stack: true }), // Include stack traces for errors
             winston.format.splat(), // Support string interpolation
             winston.format.json(), // JSON format for log aggregators
-            winston.format.metadata({fillExcept: ['message', 'level', 'timestamp', 'label']}),
+            winston.format.metadata({ fillExcept: ['message', 'level', 'timestamp', 'label'] }),
         );
 
         this.transports = [
-            new winston.transports.Console(),
+            new winston.transports.Console({
+                level: this.level,
+                format: this.format,
+            }),
         ];
 
         this.logger = winston.createLogger({
+            level: this.level,
             levels: this.levels,
-            level: this.logLevel,
-            format: this.logFormat,
+            format: this.format,
             transports: this.transports,
             exitOnError: false, // Don't exit on handled exceptions
-        })
+        });
     }
 
     public getLoggerInterfaces() {
@@ -74,7 +84,7 @@ class Logger {
 
 /**
  * Factory function to create logger instances with specific log levels
- * @param logLevel - Winston log level (error, warn, info, http, debug)
+ * @param level - Winston log level (error, warn, info, http, debug)
  * @returns Logger interface with structured logging methods
  */
-export const createLogger = (logLevel: string) => new Logger(logLevel).getLoggerInterfaces();
+export const createLogger = (level: string) => new LoggerManager(level).getLoggerInterfaces();

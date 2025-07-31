@@ -27,14 +27,14 @@ import {TraceIdRatioBasedSampler} from '@opentelemetry/sdk-trace-node';
 import {OTLPMetricExporter} from '@opentelemetry/exporter-metrics-otlp-http';
 import {AggregationTemporality, PeriodicExportingMetricReader} from '@opentelemetry/sdk-metrics';
 
-// Instrumentations
+// Instrumentation
 import {getNodeAutoInstrumentations} from '@opentelemetry/auto-instrumentations-node';
 import {ExpressInstrumentation} from '@opentelemetry/instrumentation-express';
 import {GraphQLInstrumentation} from '@opentelemetry/instrumentation-graphql';
 import {HttpInstrumentation} from '@opentelemetry/instrumentation-http';
 
-import {createLogger} from '../utils/logger';
-import {openTelemetryConfig, serverConfig} from '../utils/environmentVariables';
+import {createLogger} from './loggerManager';
+import {openTelemetryConfiguration, serverConfiguration} from './environmentManager';
 import {CompressionAlgorithm} from '@opentelemetry/otlp-exporter-base';
 
 /**
@@ -71,7 +71,7 @@ class OpenTelemetryManager {
     private metricReader: PeriodicExportingMetricReader | null = null;
 
     constructor() {
-        this.logger = createLogger(serverConfig.logLevel);
+        this.logger = createLogger(serverConfiguration.logLevel);
         this.config = this.validateConfiguration();
 
         // Set up process handlers if we're going to initialize
@@ -87,10 +87,10 @@ class OpenTelemetryManager {
      * Provides detailed logging about configuration decisions.
      */
     private validateConfiguration(): OpenTelemetryConfiguration {
-        const tracesEnabled = openTelemetryConfig.enableTraces;
-        const metricsEnabled = openTelemetryConfig.enableMetrics;
-        const hasValidTraceEndpoint = Boolean(openTelemetryConfig.openTelemetryTracingEndpoint);
-        const hasValidMetricsEndpoint = Boolean(openTelemetryConfig.openTelemetryMetricEndpoint);
+        const tracesEnabled = openTelemetryConfiguration.enableTraces;
+        const metricsEnabled = openTelemetryConfiguration.enableMetrics;
+        const hasValidTraceEndpoint = Boolean(openTelemetryConfiguration.tracesEndpointUrl);
+        const hasValidMetricsEndpoint = Boolean(openTelemetryConfiguration.metricsEndpointUrl);
 
         // Log configuration validation results
         if (tracesEnabled && !hasValidTraceEndpoint) {
@@ -126,10 +126,10 @@ class OpenTelemetryManager {
     private createServiceResource() {
         return resourceFromAttributes({
             ...SDK_INFO,
-            [ATTR_SERVICE_NAME]: serverConfig.serviceName,
-            [ATTR_SERVICE_VERSION]: serverConfig.serviceVersion,
-            'service.namespace': openTelemetryConfig.openTelemetryServiceNamespace || 'default',
-            'deployment.environment': serverConfig.nodeEnv,
+            [ATTR_SERVICE_NAME]: serverConfiguration.serviceName,
+            [ATTR_SERVICE_VERSION]: serverConfiguration.serviceVersion,
+            'service.namespace': openTelemetryConfiguration.nameSpace || 'default',
+            'deployment.environment': serverConfiguration.nodeEnv,
         });
     }
 
@@ -145,15 +145,15 @@ class OpenTelemetryManager {
 
         try {
             const exporter = new OTLPTraceExporter({
-                url: openTelemetryConfig.openTelemetryTracingEndpoint!,
-                headers: openTelemetryConfig.openTelemetryTracingExporterHeaders || {},
+                url: openTelemetryConfiguration.tracesEndpointUrl!,
+                headers: openTelemetryConfiguration.tracesHeaders || {},
                 timeoutMillis: 10000,
                 compression: CompressionAlgorithm.GZIP,
             });
 
             this.logger.info('Trace exporter configured', {
-                endpoint: openTelemetryConfig.openTelemetryTracingEndpoint,
-                samplingRate: openTelemetryConfig.samplingRate,
+                endpoint: openTelemetryConfiguration.tracesEndpointUrl,
+                samplingRate: openTelemetryConfiguration.samplingRate,
             });
 
             return exporter;
@@ -177,8 +177,8 @@ class OpenTelemetryManager {
 
         try {
             const metricExporter = new OTLPMetricExporter({
-                url: openTelemetryConfig.openTelemetryMetricEndpoint!,
-                headers: openTelemetryConfig.openTelemetryMetricExporterHeaders || {},
+                url: openTelemetryConfiguration.metricsEndpointUrl!,
+                headers: openTelemetryConfiguration.metricsHeaders || {},
                 timeoutMillis: 10000,
                 compression: CompressionAlgorithm.GZIP,
                 temporalityPreference: AggregationTemporality.CUMULATIVE,
@@ -186,13 +186,13 @@ class OpenTelemetryManager {
 
             const reader = new PeriodicExportingMetricReader({
                 exporter: metricExporter,
-                exportIntervalMillis: openTelemetryConfig.openTelemetryMetricsExportInterval,
+                exportIntervalMillis: openTelemetryConfiguration.metricExportInterval,
                 exportTimeoutMillis: 10000,
             });
 
             this.logger.info('Metrics reader configured', {
-                endpoint: openTelemetryConfig.openTelemetryMetricEndpoint,
-                exportInterval: `${openTelemetryConfig.openTelemetryMetricsExportInterval}ms`,
+                endpoint: openTelemetryConfiguration.metricsEndpointUrl,
+                exportInterval: `${openTelemetryConfiguration.metricExportInterval}ms`,
             });
 
             return reader;
@@ -220,7 +220,7 @@ class OpenTelemetryManager {
                         enabled: false, // File system operations can be very noisy
                     },
                     '@opentelemetry/instrumentation-dns': {
-                        enabled: serverConfig.nodeEnv !== 'production',
+                        enabled: serverConfiguration.nodeEnv !== 'production',
                     },
                     '@opentelemetry/instrumentation-http': {
                         enabled: true,
@@ -243,7 +243,7 @@ class OpenTelemetryManager {
             instrumentations.push(
                 new GraphQLInstrumentation({
                     depth: 10,
-                    allowValues: serverConfig.nodeEnv !== 'production',
+                    allowValues: serverConfiguration.nodeEnv !== 'production',
                     mergeItems: true,
                 })
             );
@@ -257,7 +257,7 @@ class OpenTelemetryManager {
      *
      * Main initialisation method that sets up the OpenTelemetry SDK with configured components.
      */
-    public initialize(): InitialisationResult {
+    public initialise(): InitialisationResult {
         const result: InitialisationResult = {
             success: false,
             initialized: false,
@@ -287,7 +287,7 @@ class OpenTelemetryManager {
             // Add trace configuration if available
             if (this.traceExporter) {
                 sdkConfig.traceExporter = this.traceExporter;
-                sdkConfig.sampler = new TraceIdRatioBasedSampler(openTelemetryConfig.samplingRate);
+                sdkConfig.sampler = new TraceIdRatioBasedSampler(openTelemetryConfiguration.samplingRate);
                 result.enabledFeatures.push('tracing');
             }
 
@@ -303,8 +303,8 @@ class OpenTelemetryManager {
             this.initialized = true;
 
             this.logger.info('OpenTelemetry SDK initialized successfully', {
-                serviceName: serverConfig.serviceName,
-                serviceVersion: serverConfig.serviceVersion,
+                serviceName: serverConfiguration.serviceName,
+                serviceVersion: serverConfiguration.serviceVersion,
                 enabledFeatures: result.enabledFeatures.join(', '),
                 tracingEnabled: Boolean(this.traceExporter),
                 metricsEnabled: Boolean(this.metricReader),

@@ -20,10 +20,11 @@
 import {ValidationContext} from 'graphql/validation';
 import {GraphQLError} from 'graphql/error';
 
-import {createLogger} from '../utils/logger';
-import {apolloArmorConfig, serverConfig} from '../utils/environmentVariables';
+import {createLogger} from '../managers/loggerManager';
+import {armourConfiguration, serverConfiguration} from '../managers/environmentManager';
+import {GraphQLArmorConfig} from '@escape.tech/graphql-armor-types';
 
-const logger = createLogger(serverConfig.logLevel);
+const logger = createLogger(serverConfiguration.logLevel);
 
 /**
  * Centralized rejection logging for security monitoring
@@ -31,14 +32,14 @@ const logger = createLogger(serverConfig.logLevel);
  * Logs all Apollo Armor rejections for security analysis and limit tuning.
  * Consider integrating with security monitoring tools in production.
  *
- * @param ctx - GraphQL validation context (may be null)
+ * @param ctx - GraphQL validation context (maybe null)
  * @param error - The GraphQL error containing rejection details
  */
 const logRejection: (ctx: (ValidationContext | null), error: GraphQLError) => void = (ctx: ValidationContext | null, error: GraphQLError): void => {
     logger.warn('Query rejected', {error: error.message, stack: error.stack, context: ctx})
 }
 
-const apolloArmorOptions = {
+const apolloArmorOptions: GraphQLArmorConfig = {
     /**
      * Block Field Suggestions
      *
@@ -51,8 +52,8 @@ const apolloArmorOptions = {
      * Recommendation: ALWAYS ENABLE in production
      */
     blockFieldSuggestion: {
-        enabled: apolloArmorConfig.enableBlockFieldSuggestion,
-        mask: '<[REDACTED]>',
+        enabled: armourConfiguration.enableBlockFieldSuggestion,
+        mask: armourConfiguration.blockFieldSuggestionMask,
     },
 
     /**
@@ -75,12 +76,12 @@ const apolloArmorOptions = {
      * - Consider your database/subgraph performance capabilities
      */
     costLimit: {
-        enabled: apolloArmorConfig.enableCostLimit,
-        maxCost: 5000, // Maximum allowed query cost
-        objectCost: 2, // Cost per object field
-        scalarCost: 1, // Cost per scalar field
-        depthCostFactor: 1.5, // Multiplier for each nesting level
-        ignoreIntrospection: true, // Don't apply cost analysis to introspection queries
+        enabled: armourConfiguration.enableCostLimit,
+        maxCost: armourConfiguration.costLimitMaxCost, // Maximum allowed query cost
+        objectCost: armourConfiguration.costLimitObjectCost, // Cost per object field
+        scalarCost: armourConfiguration.costLimitScalarCost, // Cost per scalar field
+        depthCostFactor: armourConfiguration.costLimitDepthCostFactor, // Multiplier for each nesting level
+        ignoreIntrospection: armourConfiguration.costLimitIgnoreIntrospection, // Don't apply cost analysis to introspection queries
         onReject: [logRejection], // Log rejected queries for analysis
         propagateOnRejection: true, // Include rejection details in error response
     },
@@ -103,10 +104,10 @@ const apolloArmorOptions = {
      * - Monitor for legitimate queries hitting the limit
      */
     maxDepth: {
-        enabled: apolloArmorConfig.enableMaxDepth,
-        n: 5, // Maximum query depth allowed
+        enabled: armourConfiguration.enableMaxDepth,
+        n: armourConfiguration.maxDepthLimit, // Maximum query depth allowed
         ignoreIntrospection: true, // Introspection queries can be deep
-        flattenFragments: false, // Count fragment depth separately (more accurate)
+        flattenFragments: armourConfiguration.maxDepthFlattenFragments, // Count fragment depth separately (more accurate)
         onReject: [logRejection], // Log rejected queries for analysis
         propagateOnRejection: true, // Include rejection details in error response
     },
@@ -134,8 +135,8 @@ const apolloArmorOptions = {
      * - Monitor for false positives in complex UIs
      */
     maxAliases: {
-        enabled: apolloArmorConfig.enableMaxAliases,
-        n: 15, // Maximum aliases per query
+        enabled: armourConfiguration.enableMaxAliases,
+        n: armourConfiguration.maxAliasesLimit, // Maximum aliases per query
         onReject: [logRejection], // Log rejected queries for analysis
         propagateOnRejection: true, // Include rejection details in error response
     },
@@ -162,8 +163,8 @@ const apolloArmorOptions = {
      * - Monitor for applications using many custom directives
      */
     maxDirectives: {
-        enabled: apolloArmorConfig.enableMaxDirectives,
-        n: 50, // Maximum directives per query
+        enabled: armourConfiguration.enableMaxDirectives,
+        n: armourConfiguration.maxDirectivesLimit, // Maximum directives per query
         onReject: [logRejection], // Log rejected queries for analysis
         propagateOnRejection: true, // Include rejection details in error response
     },
@@ -186,8 +187,8 @@ const apolloArmorOptions = {
      * - Consider query complexity over raw size
      */
     maxTokens: {
-        enabled: apolloArmorConfig.enableMaxTokens,
-        n: 1000, // Maximum tokens per query
+        enabled: armourConfiguration.enableMaxTokens,
+        n: armourConfiguration.maxTokensLimit, // Maximum tokens per query
         onReject: [logRejection], // Log rejected queries for analysis
         propagateOnRejection: true, // Include rejection details in error response
     }

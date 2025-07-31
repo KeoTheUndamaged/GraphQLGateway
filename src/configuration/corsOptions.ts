@@ -21,10 +21,10 @@
  */
 
 
-import { serverConfig, corsConfig } from '../utils/environmentVariables';
-import {createLogger} from '../utils/logger';
+import { serverConfiguration, corsConfiguration } from '../managers/environmentManager';
+import {createLogger} from '../managers/loggerManager';
 
-const logger = createLogger(serverConfig.logLevel);
+const logger = createLogger(serverConfiguration.logLevel);
 
 /**
  * Dynamic Origin Validation Function
@@ -57,8 +57,8 @@ const allowedOrigins = (origin: string | undefined, callback: (err: Error | null
         const hostname = new URL(origin).hostname;
 
         // Environment-specific domain validation
-        const allowedDomain = serverConfig.nodeEnv === 'production'
-            ? corsConfig.corsAllowedDomains // Production: Use configured domain
+        const allowedDomain = serverConfiguration.nodeEnv === 'production'
+            ? corsConfiguration.allowedOrigins // Production: Use configured domain
             : 'localhost';// Development: Allow localhost
 
         // Flexible domain matching logic
@@ -75,7 +75,7 @@ const allowedOrigins = (origin: string | undefined, callback: (err: Error | null
                 origin: origin,
                 hostname: hostname,
                 allowedDomain: allowedDomain,
-                environment: serverConfig.nodeEnv
+                environment: serverConfiguration.nodeEnv
             });
             callback(null, true);
         } else {
@@ -85,7 +85,7 @@ const allowedOrigins = (origin: string | undefined, callback: (err: Error | null
                 origin: origin,
                 hostname: hostname,
                 allowedDomain: allowedDomain,
-                environment: serverConfig.nodeEnv,
+                environment: serverConfiguration.nodeEnv,
                 reason: 'Domain not in allowed list'
             });
 
