@@ -31,9 +31,10 @@ const logger = createLogger(serverConfiguration.logLevel);
  *
  * Validates incoming request origin against allowed domains.
  * Implements different validation logic for development vs production environments.
+ * Now supports multiple allowed origins for production environments.
  *
  * Origin Validation Rules:
- * - Production: Exact domain match or subdomain of configured domain
+ * - Production: Exact domain match or subdomain of any configured domain
  * - Development: Allow localhost on any port for local development
  * - No origin: Allow requests from mobile apps, Postman, server-to-server calls
  *
@@ -51,30 +52,47 @@ const allowedOrigins = (origin: string | undefined, callback: (err: Error | null
         callback(null, true);
         return;
     }
+
     try {
         // Parse the origin URL to extract the hostname
         // This handles full URLs like "https://app.example.com:3000"
         const hostname = new URL(origin).hostname;
 
         // Environment-specific domain validation
-        const allowedDomain = serverConfiguration.nodeEnv === 'production'
-            ? corsConfiguration.allowedOrigins // Production: Use configured domain
-            : 'localhost';// Development: Allow localhost
+        let allowedDomains: string[];
 
+        if (serverConfiguration.nodeEnv === 'production') {
+            // Production: Parse allowed origins from configuration
+            // Support both single domain and comma-separated list
+            allowedDomains = corsConfiguration.allowedOrigins
+                .split(',')
+                .map(domain => domain.trim())
+                .filter(domain => domain.length > 0);
+        } else {
+            // Development: Allow localhost
+            allowedDomains = ['localhost'];
+        }
+
+        // Check if hostname matches any allowed domain
         // Flexible domain matching logic
         // Allows both exact matches and subdomain access
-        // Examples for domain "example.com":
+        // Examples for domains "example.com,test.com":
         // ✅ example.com (exact match)
         // ✅ app.example.com (subdomain)
-        // ✅ api.staging.example.com (nested subdomain)
+        // ✅ test.com (exact match)
+        // ✅ api.test.com (subdomain)
         // ❌ malicious-example.com (not a real subdomain)
 
-        if (hostname === allowedDomain || hostname.endsWith(`.${allowedDomain}`)) {
+        const isAllowed = allowedDomains.some(allowedDomain =>
+            hostname === allowedDomain || hostname.endsWith(`.${allowedDomain}`)
+        );
+
+        if (isAllowed) {
             // Log successful origin validation for monitoring
             logger.debug('CORS origin allowed', {
                 origin: origin,
                 hostname: hostname,
-                allowedDomain: allowedDomain,
+                allowedDomains: allowedDomains,
                 environment: serverConfiguration.nodeEnv
             });
             callback(null, true);
@@ -84,7 +102,7 @@ const allowedOrigins = (origin: string | undefined, callback: (err: Error | null
             logger.warn('CORS origin blocked', {
                 origin: origin,
                 hostname: hostname,
-                allowedDomain: allowedDomain,
+                allowedDomains: allowedDomains,
                 environment: serverConfiguration.nodeEnv,
                 reason: 'Domain not in allowed list'
             });
@@ -184,9 +202,9 @@ export default corsOptions;
 /**
  * PRODUCTION DEPLOYMENT CHECKLIST:
  *
- * 1. ✅ Set CORS_ALLOWED_DOMAIN environment variable to your production domain
+ * 1. ✅ Set CORS_ALLOWED_DOMAIN environment variable to your production domains (comma-separated)
  * 2. ✅ Verify subdomain access works as expected (app.domain.com, api.domain.com)
- * 3. ✅ Test CORS with your actual frontend application
+ * 3. ✅ Test CORS with your actual frontend applications
  * 4. ✅ Monitor logs for blocked origins (potential attacks or misconfigurations)
  * 5. ✅ Consider disabling credentials if not needed for better security
  * 6. ✅ Validate that preflight requests work correctly for your GraphQL mutations
@@ -197,6 +215,13 @@ export default corsOptions;
  * - Frontend running on http://localhost:3000 will be automatically allowed
  * - No need to configure CORS_ALLOWED_DOMAIN in development
  *
+ * MULTIPLE ORIGINS SETUP:
+ *
+ * - Set CORS_ALLOWED_DOMAIN=example.com,test.com for multiple domains
+ * - Supports both exact matches and subdomains for each domain
+ * - example.com allows: example.com, app.example.com, api.example.com
+ * - test.com allows: test.com, staging.test.com, app.test.com
+ *
  * SECURITY BEST PRACTICES:
  *
  * - Never use '*' for allowed origins in production
@@ -204,6 +229,7 @@ export default corsOptions;
  * - Consider implementing rate limiting for CORS violations
  * - Use HTTPS in production to prevent origin spoofing
  * - Validate that your domain validation logic is bulletproof
+ * - Keep the list of allowed origins as minimal as possible
  *
  * TROUBLESHOOTING COMMON ISSUES:
  *
@@ -211,6 +237,7 @@ export default corsOptions;
  * - Preflight failures: Verify OPTIONS method is allowed and headers are correct
  * - Credentials issues: Ensure both server and client enable credentials
  * - Mobile app issues: Verify requests without an origin header are allowed
+ * - Multiple origins: Ensure domains are comma-separated without spaces
  *
  * MONITORING RECOMMENDATIONS:
  *

@@ -5,19 +5,22 @@ A production-ready Apollo Federation Gateway service built with Express.js and T
 ## 🚀 Features
 
 ### Core Architecture
+
 - **Apollo Federation Gateway** - Unified GraphQL API over multiple subgraph services
 - **Express.js 5** - High-performance web framework with modern middleware
 - **TypeScript** - Type-safe development with comprehensive type definitions
 - **Production-ready** - Graceful shutdown, error handling, and health checks
 
 ### Security & Protection
-- **Apollo Armor** - Comprehensive GraphQL security (query depth, complexity, rate limiting)
+
+- **Apollo Armour** - Comprehensive GraphQL security (query depth, complexity, rate limiting)
 - **Helmet** - Security headers for common web vulnerabilities
 - **CORS** - Cross-origin request filtering with configurable policies
 - **Rate Limiting** - Request frequency limiting to prevent abuse and DoS attacks
 - **Input Validation** - Environment variable validation with Zod schemas
 
 ### Observability & Monitoring
+
 - **OpenTelemetry** - Distributed tracing and metrics collection
 - **Winston Logging** - Structured JSON logging with multiple levels
 - **HTTP Request Logging** - Morgan middleware integrated with Winston
@@ -25,6 +28,7 @@ A production-ready Apollo Federation Gateway service built with Express.js and T
 - **Error Tracking** - Comprehensive error handling and reporting
 
 ### Performance & Reliability
+
 - **Query Caching** - In-memory LRU cache for GraphQL query results
 - **Connection Pooling** - Efficient subgraph service connections
 - **Graceful Shutdown** - Zero-downtime deployments with proper cleanup
@@ -52,7 +56,6 @@ A production-ready Apollo Federation Gateway service built with Express.js and T
   # Edit .env with your configuration
 ```
 
-
 ## ⚙️ Configuration
 
 ### Environment Variables
@@ -60,20 +63,20 @@ A production-ready Apollo Federation Gateway service built with Express.js and T
 The application uses environment-based configuration with Zod validation. Key configuration areas:
 
 | Variable Name | Type | Default Value | Enum Options | Description |
-|--------------|------|---------------|--------------|-------------|
+|---|---|---|---|---|
 | **Server Configuration** |
-| `NODE_ENV` | enum | `production` | `production`, `candidate`, `uat`, `development`, `test` | Controls environment-specific behavior throughout the application |
+| `NODE_ENV` | enum | `production` | `production`, `candidate`, `uat`, `development`, `test` | Controls environment-specific behaviour throughout the application |
 | `PORT` | string | `8080` | - | HTTP server port number |
 | `LOG_LEVEL` | enum | `warn` | `error`, `warn`, `info`, `http`, `debug` | Winston logging level for application verbosity |
 | `SERVICE_NAME` | string | *required* | - | Unique service identifier for monitoring and logging |
 | `SERVICE_VERSION` | string | *required* | - | Version identifier for deployment tracking |
 | **CORS Configuration** |
-| `CORS_ALLOWED_DOMAIN` | string | *required* | - | Domain authorized for cross-origin requests |
+| `CORS_ALLOWED_DOMAIN` | string | *required* | - | Comma-separated list of authorised domains for cross-origin requests |
 | **GraphQL Configuration** |
 | `ENABLE_GRAPHQL_PLAYGROUND` | boolean | `false` | `true`, `false` | Enables GraphQL Playground web interface |
 | `ENABLE_INTROSPECTION` | boolean | `false` | `true`, `false` | Allows clients to query GraphQL schema structure |
 | `ALLOWED_BATCHED_REQUESTS` | boolean | `false` | `true`, `false` | Enables multiple GraphQL operations in single HTTP request |
-| **Apollo Armor Security** |
+| **Apollo Armour Security** |
 | `ENABLE_BLOCK_FIELD_SUGGESTION` | boolean | `true` | `true`, `false` | Prevents GraphQL field name suggestions |
 | `BLOCK_FIELD_SUGGESTION_MASK` | string | `<[REDACTED]>` | - | Replacement text for blocked field suggestions |
 | `ENABLE_COST_LIMIT` | boolean | `true` | `true`, `false` | Enables query cost analysis and limiting |
@@ -129,7 +132,6 @@ subgraphs:
       file: ./subgraphs/products.graphql
 ```
 
-
 ## 🚀 Usage
 
 ### Development
@@ -145,7 +147,6 @@ subgraphs:
   npm run compose
 ```
 
-
 ### Production
 
 ```shell script
@@ -156,7 +157,6 @@ subgraphs:
   npm start
 ```
 
-
 ### Testing
 
 ```shell script
@@ -164,20 +164,22 @@ subgraphs:
   npm test
 ```
 
-
 ## 📚 API Endpoints
 
 ### GraphQL Endpoint
+
 - **URL**: `POST /graphql`
 - **Description**: Main GraphQL API endpoint
 - **Features**: Query planning, federated execution, caching
 
 ### Health Check
+
 - **URL**: `GET /healthcheck`
 - **Description**: Service health and status information
 - **Response**: Service status, uptime, version, memory usage
 
 ### Telemetry Status (Development Only)
+
 - **URL**: `GET /telemetry-status`
 - **Description**: OpenTelemetry status and configuration
 - **Available**: Non-production environments only
@@ -185,26 +187,31 @@ subgraphs:
 ## 🏗️ Architecture
 
 ### Request Flow
-1. **Security Layer** - Helmet, CORS, Rate Limiting
-2. **Logging** - HTTP request logging with Morgan
-3. **GraphQL Processing** - Apollo Server with Federation Gateway
-4. **Query Planning** - Route queries to appropriate subgraphs
-5. **Execution** - Parallel subgraph requests with result composition
-6. **Caching** - LRU cache for improved performance
+
+1.  **Security Layer** - Helmet, CORS, Rate Limiting
+2.  **Logging** - HTTP request logging with Morgan
+3.  **GraphQL Processing** - Apollo Server with Federation Gateway
+4.  **Query Planning** - Route queries to appropriate subgraphs
+5.  **Execution** - Parallel subgraph requests with result composition
+6.  **Caching** - LRU cache for improved performance
 
 ### Security Architecture
-- **Defense in Depth** - Multiple security layers
-- **Query Protection** - Apollo Armor prevents malicious queries
+
+- **Defence in Depth** - Multiple security layers
+- **Query Protection** - Apollo Armour prevents malicious queries
 - **Request Filtering** - CORS and rate limiting
-- **Error Sanitization** - Safe error responses in production
+- **Error Sanitisation** - Safe error responses in production
 
 ## 🔧 Configuration Files
 
 ### TypeScript Configuration (`tsconfig.json`)
+
 Optimised for Node.js with strict type checking and modern ES features.
 
-### Apollo Armor Security
+### Apollo Armour Security
+
 Comprehensive GraphQL security rules protecting against:
+
 - Query depth attacks
 - Query complexity attacks
 - Alias flooding
@@ -212,7 +219,9 @@ Comprehensive GraphQL security rules protecting against:
 - Token flooding
 
 ### CORS Policy
+
 Configurable cross-origin resource sharing with:
+
 - Origin allowlisting
 - Method restrictions
 - Credential support
@@ -221,46 +230,52 @@ Configurable cross-origin resource sharing with:
 ## 📊 Monitoring & Observability
 
 ### Logging
+
 - **Structured JSON** - Machine-readable log format
 - **Multiple Levels** - Error, warn, info, debug
 - **Request Tracking** - HTTP request/response logging
 - **Error Context** - Comprehensive error information
 
 ### Metrics & Tracing
+
 - **OpenTelemetry Integration** - Distributed tracing
 - **Express Instrumentation** - HTTP request metrics
 - **GraphQL Instrumentation** - Query performance tracking
 
 ### Health Monitoring
+
 - **Liveness Probes** - Process health status
 - **Performance Metrics** - Response times and throughput
 
 ## 🚢 Deployment
 
 ### Container Deployment
+
 The application is container-ready with:
+
 - **Graceful Shutdown** - SIGTERM/SIGINT handling
 - **Health Checks** - Container orchestration support
 - **Process Monitoring** - Unhandled error recovery
 - **Zero-downtime Updates** - Rolling deployment support
 
 ### Environment-specific Configuration
+
 - **Development** - Full introspection, detailed errors, debug logging
 - **Staging** - Production-like with enhanced monitoring
 - **Production** - Security hardened, minimal error disclosure
 
 ## 🤝 Contributing
 
-1. Follow TypeScript and ESLint configurations
-2. Maintain comprehensive documentation
-3. Add tests for new features
-4. Update environment templates
-5. Follow security best practices
+1.  Follow TypeScript and ESLint configurations
+2.  Maintain comprehensive documentation
+3.  Add tests for new features
+4.  Update environment templates
+5.  Follow security best practices
 
 ## 📄 License
 
 This project is private and proprietary.
 
----
+-----
 
 **Built with ❤️ using Apollo Federation, Express.js, and TypeScript**
