@@ -32,8 +32,8 @@ A production-ready Apollo Federation Gateway service built with Express.js and T
 
 ## 📋 Prerequisites
 
-- **Node.js** 18+
-- **npm** 8+
+- **Node.js** 22+
+- **npm** 11+
 - **TypeScript** 5.5+
 - **Apollo Rover CLI** (for supergraph composition)
 
