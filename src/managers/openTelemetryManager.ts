@@ -13,29 +13,34 @@
  * - Configuration Validation: Centralised validation logic
  */
 
-import {SDK_INFO} from '@opentelemetry/core';
-// Sampling
-import {NodeSDK} from '@opentelemetry/sdk-node';
-import {resourceFromAttributes} from '@opentelemetry/resources';
-import {ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION} from '@opentelemetry/semantic-conventions';
+// ===== OPENTELEMETRY CORE & SDK =====
+import { SDK_INFO } from '@opentelemetry/core';
+import { NodeSDK } from '@opentelemetry/sdk-node';
 
-// Trace Exports
-import {OTLPTraceExporter} from '@opentelemetry/exporter-trace-otlp-http';
-import {TraceIdRatioBasedSampler} from '@opentelemetry/sdk-trace-node';
+// ===== RESOURCE IDENTIFICATION & METADATA =====
+import { resourceFromAttributes } from '@opentelemetry/resources';
+import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 
-// Metrics Exports
-import {OTLPMetricExporter} from '@opentelemetry/exporter-metrics-otlp-http';
-import {AggregationTemporality, PeriodicExportingMetricReader} from '@opentelemetry/sdk-metrics';
+// ===== TRACE COLLECTION & SAMPLING =====
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { TraceIdRatioBasedSampler } from '@opentelemetry/sdk-trace-node';
 
-// Instrumentation
-import {getNodeAutoInstrumentations} from '@opentelemetry/auto-instrumentations-node';
-import {ExpressInstrumentation} from '@opentelemetry/instrumentation-express';
-import {GraphQLInstrumentation} from '@opentelemetry/instrumentation-graphql';
-import {HttpInstrumentation} from '@opentelemetry/instrumentation-http';
+// ===== METRICS COLLECTION & EXPORT =====
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
+import { AggregationTemporality, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 
-import {createLogger} from './loggerManager';
-import {openTelemetryConfiguration, serverConfiguration} from './environmentManager';
-import {CompressionAlgorithm} from '@opentelemetry/otlp-exporter-base';
+// ===== INSTRUMENTATION & AUTO-DISCOVERY =====
+import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
+import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
+import { GraphQLInstrumentation } from '@opentelemetry/instrumentation-graphql';
+import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
+
+// ===== EXPORT CONFIGURATION & COMPRESSION =====
+import { CompressionAlgorithm } from '@opentelemetry/otlp-exporter-base';
+
+// ===== APPLICATION DEPENDENCIES =====
+import { createLogger } from './loggerManager';
+import { openTelemetryConfiguration, serverConfiguration } from './environmentManager';
 
 /**
  * OpenTelemetry Configuration Interface
