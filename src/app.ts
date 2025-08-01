@@ -131,7 +131,7 @@ export const createApp = async () => {
      *
      * Configuration Highlights:
      * - Gateway Integration: Uses Apollo Federation Gateway for query routing
-     * - Security Plugins: Apollo Armor protection plugins
+     * - Security Plugins: Apollo Armour protection plugins
      * - Environment Awareness: Different behaviours for development vs production
      * - Error Handling: Custom error formatting with security considerations
      * - Performance Features: Batched requests, query caching
@@ -474,7 +474,7 @@ export const createApp = async () => {
      * Provides a detailed OpenTelemetry status for debugging.
      */
     if (serverConfiguration.nodeEnv !== 'production') {
-        app.get('/telemetry-status', (req, res) => {
+        app.get('/telemetry-status', (_req, res) => {
             const status = openTelemetryManager.getStatus();
             res.json({
                 openTelemetry: status,

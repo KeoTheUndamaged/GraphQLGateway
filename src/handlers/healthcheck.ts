@@ -59,10 +59,10 @@ interface Healthcheck {
  *
  * Response Time Target: < 50 ms (critical for load balancer timeouts)
  *
- * @param req - Express request object (unused but available for advanced checks)
+ * @param _req - Express request object (unused but available for advanced checks)
  * @param res - Express response object for health status response
  */
-const healthcheck = (req: Request, res: Response) => {
+const healthcheck = (_req: Request, res: Response) => {
     const body: Healthcheck = {
         /**
          * Service Status Assessment
