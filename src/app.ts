@@ -1,25 +1,38 @@
-import express, { Express, json } from 'express';
-import cors from 'cors';
-import rateLimit from 'express-rate-limit';
-import {createLogger, Logger} from './managers/loggerManager';
-import OpenTelemetryManager from './managers/openTelemetryManager';
-import {ApolloArmor} from '@escape.tech/graphql-armor';
-import apolloArmorOptions from './configuration/apolloArmorOptions';
-import {readFileSync} from 'node:fs';
+// ===== NODE.js BUILT-IN MODULES =====
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import {ApolloGateway} from '@apollo/gateway';
-import {ApolloServer} from '@apollo/server';
-import {graphqlConfiguration, serverConfiguration} from './managers/environmentManager';
-import formatError from './configuration/apolloFormatErrorOptions';
-import { InMemoryLRUCache } from '@apollo/utils.keyvaluecache';
-import helmet from 'helmet';
+
+// ===== EXPRESS.js FRAMEWORK & MIDDLEWARE =====
+import express, { Express, json } from 'express';
+import { ExpressContextFunctionArgument, expressMiddleware } from '@as-integrations/express5';
 import morgan from 'morgan';
-import healthcheckHandler from './handlers/healthcheck';
-import {ExpressContextFunctionArgument, expressMiddleware} from '@as-integrations/express5';
-import {createErrorHandler} from './middleware/errorHandler';
+
+// ===== SECURITY & PROTECTION MIDDLEWARE =====
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import { ApolloArmor } from '@escape.tech/graphql-armor';
+
+// ===== APOLLO GRAPHQL FEDERATION =====
+import { ApolloGateway } from '@apollo/gateway';
+import { ApolloServer } from '@apollo/server';
+import { InMemoryLRUCache } from '@apollo/utils.keyvaluecache';
+
+// ===== OBSERVABILITY & MONITORING =====
+import { createLogger, Logger } from './managers/loggerManager';
+import OpenTelemetryManager from './managers/openTelemetryManager';
+
+// ===== APPLICATION CONFIGURATION =====
+import { graphqlConfiguration, serverConfiguration } from './managers/environmentManager';
+import apolloArmorOptions from './configuration/apolloArmorOptions';
 import corsOptions from './configuration/corsOptions';
 import helmetOptions from './configuration/helmetOptions';
 import rateLimitOptions from './configuration/rateLimitOptions';
+import formatError from './configuration/apolloFormatErrorOptions';
+
+// ===== REQUEST HANDLERS & MIDDLEWARE =====
+import healthcheckHandler from './handlers/healthcheck';
+import { createErrorHandler } from './middleware/errorHandler';
 
 export const createApp = async () => {
     const app: Express = express();
