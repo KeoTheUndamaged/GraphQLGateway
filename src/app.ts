@@ -14,7 +14,7 @@ import rateLimit from 'express-rate-limit';
 import { ApolloArmor } from '@escape.tech/graphql-armor';
 
 // ===== APOLLO GRAPHQL FEDERATION =====
-import { ApolloGateway } from '@apollo/gateway';
+import {ApolloGateway} from '@apollo/gateway';
 import { ApolloServer } from '@apollo/server';
 import { InMemoryLRUCache } from '@apollo/utils.keyvaluecache';
 
@@ -23,7 +23,7 @@ import { createLogger, Logger } from './managers/loggerManager';
 import OpenTelemetryManager from './managers/openTelemetryManager';
 
 // ===== APPLICATION CONFIGURATION =====
-import { graphqlConfiguration, serverConfiguration } from './managers/environmentManager';
+import {graphqlConfiguration, serverConfiguration} from './managers/environmentManager';
 import apolloArmorOptions from './configuration/apolloArmorOptions';
 import corsOptions from './configuration/corsOptions';
 import helmetOptions from './configuration/helmetOptions';
@@ -32,7 +32,8 @@ import formatError from './configuration/apolloFormatErrorOptions';
 
 // ===== REQUEST HANDLERS & MIDDLEWARE =====
 import healthcheckHandler from './handlers/healthcheck';
-import { createErrorHandler } from './middleware/errorHandler';
+import { createErrorHandler } from './middleware/errorHandlerMiddleware';
+import {buildService} from './utils/graphqlBuildService';
 
 export const createApp = async () => {
     const app: Express = express();
@@ -134,6 +135,7 @@ export const createApp = async () => {
      */
     const gateway: ApolloGateway = new ApolloGateway({
         supergraphSdl: supergraphSdl,
+        buildService
     });
 
     /**

@@ -87,7 +87,6 @@ const headerTransformer = (val: any): Record<string, string> => {
     }
 };
 
-
 /**
  * Comprehensive Environment Variable Schema
  *
@@ -864,6 +863,41 @@ const schema: ZodObject = z.object({
      * Default: 1.0 - Full sampling for development and testing
      */
     OPEN_TELEMETRY_SAMPLING_RATE: z.string().transform(numberTransformer).pipe(z.number().min(0).max(1)).default(1),
+
+    /**
+     * Backend Service Tokens
+     *
+     * Authentication tokens for communicating with backend microservices in the federation.
+     * These tokens are used by the Apollo Gateway to authenticate requests when forwarding
+     * GraphQL operations to individual subgraph services.
+     *
+     * Pattern: {SERVICE}_SERVICE_TOKEN
+     * - SERVICE should match the subgraph service name in UPPERCASE
+     * - Used in buildService() function to set X-Service-Token header
+     * - Tokens should be secure, long-lived credentials (JWT, API keys, etc.)
+     *
+     * Security Considerations:
+     * - Store in secure environment variable management (AWS Secrets Manager, Azure Key Vault, etc.)
+     * - Rotate regularly, according to security policy
+     * - Use different tokens per environment (dev, staging, prod)
+     * - Monitor token usage and expiration
+     *
+     * Examples:
+     * - PRODUCTS_SERVICE_TOKEN: Authentication for the products subgraph service
+     * - USERS_SERVICE_TOKEN: Authentication for users subgraph service
+     * - ORDERS_SERVICE_TOKEN: Authentication for the orders subgraph service
+     * - INVENTORY_SERVICE_TOKEN: Authentication for inventory subgraph service
+     * - PAYMENTS_SERVICE_TOKEN: Authentication for the payments subgraph service
+     *
+     * Usage in Gateway:
+     * The gateway automatically extracts the service name from buildService({ name })
+     * and looks for the corresponding {NAME}_SERVICE_TOKEN environment variable.
+     * If found, it adds the token to outgoing requests as an 'X-Service-Token' header.
+     */
+    PRODUCTS_SERVICE_TOKEN: z.string()
+        .min(8, "PRODUCTS_SERVICE_TOKEN must be at least 8 characters long")
+        .max(512, "PRODUCTS_SERVICE_TOKEN must not exceed 512 characters")
+        .regex(/^[A-Za-z0-9._-]+$/, "PRODUCTS_SERVICE_TOKEN must contain only alphanumeric characters, dots, underscores, and hyphens"),
 });
 
 /**
@@ -920,7 +954,6 @@ const loadEnvironmentVariables = () => {
     }
 }
 
-
 const env = loadEnvironmentVariables();
 
 /**
@@ -968,6 +1001,11 @@ export const graphqlConfiguration = {
     enablePlayground: env.ENABLE_GRAPHQL_PLAYGROUND as boolean,
     enableIntrospection: env.ENABLE_INTROSPECTION as boolean,
     allowBatchedRequests: env.ALLOWED_BATCHED_REQUESTS as boolean,
+    productServiceToken: env.PRODUCTS_SERVICE_TOKEN as string,
+}
+
+export const getServiceToken = (serviceName: string) => {
+    return env[`${serviceName.toUpperCase()}_SERVICE_TOKEN`] as string;
 }
 
 /**
