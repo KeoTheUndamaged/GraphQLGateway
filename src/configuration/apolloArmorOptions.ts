@@ -27,7 +27,7 @@ import {GraphQLArmorConfig} from '@escape.tech/graphql-armor-types';
 const logger = createLogger(serverConfiguration.logLevel);
 
 /**
- * Centralized rejection logging for security monitoring
+ * Centralised rejection logging for security monitoring
  *
  * Logs all Apollo Armor rejections for security analysis and limit tuning.
  * Consider integrating with security monitoring tools in production.

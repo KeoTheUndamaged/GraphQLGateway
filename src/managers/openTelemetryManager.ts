@@ -14,7 +14,7 @@
  */
 
 // ===== OPENTELEMETRY CORE & SDK =====
-import { SDK_INFO } from '@opentelemetry/core';
+import { SDK_INFO, W3CTraceContextPropagator } from '@opentelemetry/core';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 
 // ===== RESOURCE IDENTIFICATION & METADATA =====
@@ -287,6 +287,7 @@ class OpenTelemetryManager {
             const sdkConfig: any = {
                 resource,
                 instrumentations,
+                textMapPropagator: new W3CTraceContextPropagator(),
             };
 
             // Add trace configuration if available

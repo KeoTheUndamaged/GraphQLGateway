@@ -17,6 +17,7 @@
  * - Gateway composition errors
  */
 
+import sanitizeHtml from 'sanitize-html';
 import {createLogger} from '../managers/loggerManager';
 import {serverConfiguration} from '../managers/environmentManager';
 
@@ -57,7 +58,7 @@ const formatError = (err: any) => {
     // This helps developers debug issues quickly during development
     if (serverConfiguration.nodeEnv !== 'production') return err;
 
-    // Production Environment: Return sanitized error
+    // Production Environment: Return sanitised error
     // Only expose information that is safe for public consumption
     return {
         // Core error information that's safe to expose
@@ -116,7 +117,7 @@ const sanitiseErrorMessage = (message: string): string => {
     const isSafeError = safeErrorPatterns.some(pattern => pattern.test(message));
 
     if (isSafeError) {
-        return message; // Safe to expose as-is
+        return sanitizeHtml(message); // Safe to expose as-is
     }
 
     // For other errors, return a generic message to prevent information disclosure
