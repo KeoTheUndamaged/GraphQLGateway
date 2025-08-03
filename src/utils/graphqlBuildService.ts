@@ -94,7 +94,6 @@ export const buildService = ({ url, name }: ServiceEndpointDefinition): RemoteGr
                     }
                 });
             }
-
             /**
              * Service-to-Service Authentication
              *

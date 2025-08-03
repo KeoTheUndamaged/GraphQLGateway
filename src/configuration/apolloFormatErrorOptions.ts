@@ -1,128 +1,139 @@
 /**
- * Apollo Server Error Formatting Configuration
+ * Apollo Server GraphQL Error Formatting
  *
- * This module handles GraphQL error formatting for security and observability.
- * It provides different error exposure levels between development and production environments.
+ * This module defines a custom `formatError` function for Apollo Server, a critical
+ * part for managing how errors are presented to clients in a secure and
+ * consistent manner. It ensures full error visibility for operational monitoring
+ * while preventing sensitive information from being exposed to end users.
  *
- * Security Principles:
- * - Production: Hide sensitive error details from clients
- * - Development: Expose full error information for debugging
- * - Always log complete error details for monitoring and debugging
- *
- * Error Types Handled:
- * - GraphQL validation errors (malformed queries)
- * - GraphQL execution errors (resolver failures)
- * - Apollo Armour security violations
- * - Subgraph communication errors
- * - Gateway composition errors
+ * Core Principles:
+ * - Error Sanitisation: Hides technical details in production environments.
+ * - Observability: Logs all complete error details for internal debugging and monitoring.
+ * - Environment Awareness: Provides different behaviour for development vs. production.
+ * - Subgraph Error Handling: Unwraps nested errors from Apollo Gateway responses.
  */
 
-import sanitizeHtml from 'sanitize-html';
-import {createLogger} from '../managers/loggerManager';
-import {serverConfiguration} from '../managers/environmentManager';
+import { createLogger } from '../managers/loggerManager';
+import { serverConfiguration } from '../managers/environmentManager';
+import { GraphQLFormattedError } from 'graphql';
 
 const logger = createLogger(serverConfiguration.logLevel);
 
 /**
- * Custom GraphQL Error Formatter
+ * GraphQL Error Formatter
  *
- * Formats GraphQL errors for client responses while maintaining security.
- * All errors are logged in full for operational monitoring.
+ * This is the main entry point for Apollo Server's error handling pipeline.
+ * Its primary responsibility is to log all errors for observability and then
+ * route them to the correct formatting logic based on the current environment.
  *
- * Development vs Production Behavior:
- * - Development: Returns a complete error object including stack traces
- * - Production: Returns sanitised error with safe information only
+ * How it works:
+ * - It receives a `formattedError` (standardised for client consumption)
+ * and the raw `error` object (containing full stack traces and details).
+ * - All details from the raw error are logged immediately for operational
+ * monitoring before any sanitisation occurs.
+ * - In development, the full error is returned to facilitate debugging.
+ * - In production, the error is passed to a dedicated sanitisation function.
  *
- * @param err - The GraphQL error object from Apollo Server
- * @returns Formatted error object safe for client consumption
+ * @param formattedError - The standard GraphQL error object.
+ * @param error - The raw, underlying exception (for detailed logging).
+ * @returns Formatted error object safe for client consumption.
  */
-
-const formatError = (err: any) => {
+const formatError = (formattedError: GraphQLFormattedError, error: unknown): GraphQLFormattedError => {
     // Log all errors with complete details for monitoring and debugging
-    // This ensures no error information is lost for operational purposes
-
     logger.error('GraphQL Error Occurred', {
-        message: err.message,
-        code: err.extensions?.code,
-        errorType: err.extensions?.errorType,
-        path: err.path, // GraphQL field path where the error occurred
-        locations: err.locations, // Query line/column numbers
-        source: err.source?.body, // Original query (be careful with sensitive data)
-        stack: err.stack, // Full stack trace for debugging
-        // Additional metadata for production debugging
-        service: serverConfiguration.serviceName,
-        environment: serverConfiguration.nodeEnv,
+        message: formattedError.message,
+        code: formattedError.extensions?.code,
+        path: formattedError.path,
+        locations: formattedError.locations,
+        rawError: error,
     });
 
     // Development Environment: Return full error details
-    // This helps developers debug issues quickly during development
-    if (serverConfiguration.nodeEnv !== 'production') return err;
-
-    // Production Environment: Return sanitised error
-    // Only expose information that is safe for public consumption
-    return {
-        // Core error information that's safe to expose
-        message: sanitiseErrorMessage(err.message),
-
-        // Extensions contain structured error metadata
-        extensions: {
-            // Apollo Server standard error codes (safe to expose)
-            code: err.extensions?.code,
-
-            // Custom error types for client error handling
-            errorType: err.extensions?.errorType,
-
-            // Additional safe metadata
-            timestamp: new Date().toISOString(),
-        },
-
-        // Include GraphQL path for client debugging (usually safe)
-        path: err.path,
-
-        // Query locations help with client-side debugging
-        locations: err.locations,
-
-        // Exclude sensitive information in production:
-        // - stack traces (reveal server internals)
-        // - source code (may contain sensitive data)
-        // - internal error details
-
+    if (serverConfiguration.nodeEnv !== 'production') {
+        return formattedError;
     }
-}
+
+    // Production Environment: Route to sanitisation function
+    return formatErrorForProduction(formattedError);
+};
 
 /**
- * Sanitises error messages to prevent information disclosure
+ * Allowlisted Error Codes
  *
- * Some error messages may contain sensitive information like:
- * - Database connection strings
- * - Internal service URLs
- * - File system paths
- * - Environment variables
- *
- * @param message - Original error message
- * @returns Sanitized error message safe for client consumption
+ * This array contains a list of error codes that are considered safe to
+ * expose to clients in a production environment. These codes typically
+ * represent predictable and expected outcomes, such as a requested resource
+ * not being found or an invalid user input.
  */
-const sanitiseErrorMessage = (message: string): string => {
-    // Handle common GraphQL errors that are safe to expose
-    const safeErrorPatterns = [
-        /^Cannot query field/,           // Field doesn't exist
-        /^Variable .* is not defined/,   // Undefined variable
-        /^Argument .* is required/,      // Missing the required argument
-        /^Expected type/,                // Type mismatch
-        /^Syntax Error/,                 // Query syntax errors
-        /^Must provide query string/,    // Empty query
-    ];
+const safeErrorCodes = [
+    'NOT_FOUND',
+    'BAD_USER_INPUT',
+    'UNAUTHENTICATED',
+    'FORBIDDEN',
+    'GRAPHQL_VALIDATION_FAILED',
+];
 
-    // Check if the error message matches safe patterns
-    const isSafeError = safeErrorPatterns.some(pattern => pattern.test(message));
+/**
+ * Secure Production Error Formatting
+ *
+ * This function implements the strict error handling policy for production.
+ * It intelligently determines whether an error is safe to expose to a client
+ * or if it should be replaced with a generic, non-descriptive message.
+ *
+ * Error Handling Logic:
+ * 1. Nested Error Check: It first attempts to extract the original, specific
+ * error from a nested `extensions.response.body` object, a common pattern
+ * for errors originating from a federated subgraph.
+ * 2. Safe Code Allowlist: It checks if the identified error code (from either
+ * the nested or top-level error) is present in the `safeErrorCodes` list.
+ * 3. Sanitisation: If the error code is allowlisted, the original message and
+ * code are returned. Otherwise, a generic `INTERNAL_SERVER_ERROR` is returned.
+ *
+ * @param err - The standard GraphQL error object.
+ * @returns A formatted error object that is safe for production.
+ */
+const formatErrorForProduction = (err: GraphQLFormattedError): GraphQLFormattedError => {
+    // Attempt to extract a nested error from a Gateway response first
+    try {
+        const subgraphResponse = (err.extensions as any)?.response?.body;
+        if (subgraphResponse?.errors && Array.isArray(subgraphResponse.errors) && subgraphResponse.errors.length > 0) {
+            const originalError = subgraphResponse.errors[0];
+            const originalErrorCode = originalError.extensions?.code;
 
-    if (isSafeError) {
-        return sanitizeHtml(message); // Safe to expose as-is
+            if (originalErrorCode && safeErrorCodes.includes(String(originalErrorCode))) {
+                return {
+                    ...originalError,
+                    extensions: {
+                        ...originalError.extensions,
+                        timestamp: new Date().toISOString(),
+                    },
+                };
+            }
+        }
+    } catch (e) {
+        logger.error('Failed to parse nested subgraph error', { error: e });
     }
 
-    // For other errors, return a generic message to prevent information disclosure
-    // The full error is always logged for debugging purposes
-    return 'An error occurred while processing your request';
-}
+    // Fallback to checking the top-level error code if no nested error was found
+    const topLevelCode = err.extensions?.code;
+    if (topLevelCode && safeErrorCodes.includes(String(topLevelCode))) {
+        return {
+            ...err,
+            extensions: {
+                code: topLevelCode,
+                timestamp: new Date().toISOString(),
+            },
+        };
+    }
+
+    // Default: Return a generic error for any unhandled or unsafe errors
+    return {
+        message: 'An internal server error occurred',
+        extensions: {
+            code: 'INTERNAL_SERVER_ERROR',
+            timestamp: new Date().toISOString(),
+        },
+    };
+};
 
 export default formatError;
