@@ -97,6 +97,7 @@ const rateLimitOptions = {
      * Provides helpful information to legitimate clients while not revealing too much to attackers.
      */
     handler: (req: any, res: any) => {
+        if (!rateLimitConfiguration.enableRateLimit) return;
         // Log rate limit violations for security monitoring
         logger.warn('Rate limit exceeded', {
             ip: req.ip,
