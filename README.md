@@ -96,6 +96,7 @@ The application uses environment-based configuration with Zod validation. Key co
 | `ENABLE_MAX_TOKENS`                   | boolean       | `true`         | `true`, `false`                                         | Limits total tokens in query                                         |
 | `MAX_TOKENS_LIMIT`                    | number        | `1000`         | -                                                       | Maximum lexical tokens per query                                     |
 | **Rate Limiting**                     |
+| `ENABLE_RATE_LIMIT`                   | boolean       | `true`         | `true`, `false`                                         | Time window for rate limiting (milliseconds)                         |
 | `RATE_LIMIT_WINDOW_MS`                | number        | `900000`       | -                                                       | Time window for rate limiting (milliseconds)                         |
 | `RATE_LIMIT_MAX`                      | number        | `100`          | -                                                       | Maximum requests per IP per window                                   |
 | **OpenTelemetry Configuration**       |
