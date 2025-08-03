@@ -23,7 +23,7 @@ import { createLogger, Logger } from './managers/loggerManager';
 import OpenTelemetryManager from './managers/openTelemetryManager';
 
 // ===== APPLICATION CONFIGURATION =====
-import {graphqlConfiguration, serverConfiguration} from './managers/environmentManager';
+import {graphqlConfiguration, rateLimitConfiguration, serverConfiguration} from './managers/environmentManager';
 import apolloArmorOptions from './configuration/apolloArmorOptions';
 import corsOptions from './configuration/corsOptions';
 import helmetOptions from './configuration/helmetOptions';
@@ -402,7 +402,9 @@ export const createApp = async () => {
      * - Request limit: Maximum requests per window per IP
      * - Error responses: Structured rate limit exceeded messages
      */
-    app.use(rateLimit(rateLimitOptions))
+    if (rateLimitConfiguration.enableRateLimit) {
+        app.use(rateLimit(rateLimitOptions));
+    }
 
     /**
      * HTTP Request Logging Middleware

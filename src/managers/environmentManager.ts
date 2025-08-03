@@ -636,7 +636,7 @@ const schema: ZodObject = z.object({
      * Controls how many requests clients can make within a time window.
      * Critical for preventing abuse and ensuring fair usage.
      */
-
+    ENABLE_RATE_LIMIT: z.enum(['true', 'false']).transform(booleanTransformer).pipe(z.boolean()).default(true),
     /**
      * RATE_LIMIT_WINDOW_MS - Rate Limit Time Window
      *
@@ -1014,6 +1014,7 @@ export const getServiceToken = (serviceName: string) => {
  * Request rate limiting settings for abuse prevention.
  */
 export const rateLimitConfiguration = {
+    enableRateLimit: env.ENABLE_RATE_LIMIT as boolean,
     rateLimitWindow: env.RATE_LIMIT_WINDOW_MS as number,
     rateLimitMax: env.RATE_LIMIT_MAX as number,
 }
