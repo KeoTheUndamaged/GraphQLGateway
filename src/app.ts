@@ -38,7 +38,7 @@ import { createErrorHandler } from './middleware/errorHandlerMiddleware';
 
 export const createApp = async () => {
     const app: Express = express();
-    const logger: Logger = createLogger('info');
+    const logger: Logger = createLogger(serverConfiguration.logLevel);
 
     /**
      * OpenTelemetry Initialisation
@@ -344,7 +344,7 @@ export const createApp = async () => {
      * Security Middleware Layer
      *
      * Applied in a carefully ordered sequence to provide comprehensive security.
-     * Order matters: some middleware depends on headers set by previous middleware.
+     * Order matters: some middleware depends on headers set by the previous middleware.
      *
      * Security Architecture:
      * 1. Helmet: Security headers to prevent common web vulnerabilities
@@ -504,7 +504,7 @@ export const createApp = async () => {
      * Global Error Handler Middleware
      *
      * CRITICAL: Must be the last middleware in the chain.
-     * Catches any unhandled errors from previous middleware or routes.
+     * Catches any unhandled errors from the previous middleware or routes.
      *
      * Error Handler Responsibilities:
      * - Catch all unhandled Express errors
@@ -592,7 +592,7 @@ export const startServer = async (): Promise<void> => {
             /**
              * Graceful Shutdown Handler
              *
-             * Implements graceful shutdown for zero-downtime deployments.
+             * Implements a graceful shutdown for zero-downtime deployments.
              * Ensures in-flight requests are complete before process termination.
              *
              * Shutdown Sequence:
