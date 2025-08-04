@@ -24,6 +24,7 @@
 
 import {Request, Response} from 'express';
 import {serverConfiguration} from '../managers/environmentManager';
+import {circuitBreakerManager} from '../managers/circuitBreakerManager';
 
 /**
  * Health Check Response Interface
@@ -33,7 +34,7 @@ import {serverConfiguration} from '../managers/environmentManager';
  */
 interface Healthcheck {
     /** Overall service status - used by load balancers for routing decisions */
-    status: 'OK' | 'WARNING' | 'CRITICAL' | 'UNKNOWN';
+    status: 'OK' | 'WARNING' | 'CRITICAL' | 'DEGRADED' | 'UNKNOWN';
     /** Human-readable status description */
     message: string;
     /** ISO timestamp for health check execution time */
@@ -46,6 +47,12 @@ interface Healthcheck {
     service: {
         name: string;
         version: string;
+    }
+    circuitBreakers: {
+        healthy: boolean;
+        openCircuits: string[];
+        totalCircuits: number,
+        details: Record<string, any>
     }
     /** Memory usage metrics (development only for security) */
     memory?: NodeJS.MemoryUsage;
@@ -63,6 +70,9 @@ interface Healthcheck {
  * @param res - Express response object for health status response
  */
 const healthcheck = (_req: Request, res: Response) => {
+
+    const circruitBreakerHealth = circuitBreakerManager.getHealthStatus();
+
     const body: Healthcheck = {
         /**
          * Service Status Assessment
@@ -76,7 +86,7 @@ const healthcheck = (_req: Request, res: Response) => {
          * - Subgraph availability
          * - Resource utilisation thresholds
          */
-        status: 'OK',
+        status: circruitBreakerHealth.healthy ? 'OK' : 'DEGRADED',
         /**
          * Status Message
          *
@@ -87,7 +97,7 @@ const healthcheck = (_req: Request, res: Response) => {
         /**
          * Timestamp
          *
-         * ISO 8601 formatted timestamp for health check execution.
+         * An ISO 8601 formatted timestamp for health check execution.
          * Critical for:
          * - Debugging stale health check responses
          * - Monitoring health check frequency
@@ -125,6 +135,12 @@ const healthcheck = (_req: Request, res: Response) => {
             name: serverConfiguration.serviceName,
             version: serverConfiguration.serviceVersion,
         },
+        circuitBreakers: {
+            healthy: circruitBreakerHealth.healthy,
+            openCircuits: circruitBreakerHealth.openCircuits,
+            totalCircuits: circruitBreakerHealth.totalCircuits,
+            details: circruitBreakerHealth.stats
+        }
     }
     /**
      * Development-Only Memory Metrics

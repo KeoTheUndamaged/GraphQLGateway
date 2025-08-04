@@ -31,8 +31,24 @@ A production-ready Apollo Federation Gateway service built with Express.js and T
 
 - **Query Caching** - In-memory LRU cache for GraphQL query results
 - **Connection Pooling** - Efficient subgraph service connections
-- **Graceful Shutdown** - Zero-downtime deployments with proper cleanup
+- **Graceful Shutdown** - Zero-downtime deployments with proper clean-up
 - **Process Monitoring** - Unhandled error catching and process stability
+
+### Circuit Breaker Protection
+
+The gateway implements intelligent circuit breaker protection for all subgraph communications:
+
+- **Smart Error Classification** - Distinguishes between infrastructure failures and business logic errors
+- **Automatic Recovery** - Tests service health and automatically restores connections
+- **Graceful Degradation** - Provides meaningful fallback responses during outages
+- **Statistical Significance** - Prevents false positives with minimum call thresholds
+- **Comprehensive Monitoring** - Full visibility into service health and circuit states
+
+**Circuit Breaker States:**
+- **CLOSED** - Normal operation, all requests pass through
+- **OPEN** - Service failing, requests blocked with fallback responses
+- **HALF_OPEN** - Testing recovery, limited requests to verify service health
+
 
 ## 📋 Prerequisites
 
@@ -77,6 +93,12 @@ The application uses environment-based configuration with Zod validation. Key co
 | `ENABLE_INTROSPECTION`                | boolean       | `false`        | `true`, `false`                                         | Allows clients to query GraphQL schema structure                     |
 | `ALLOWED_BATCHED_REQUESTS`            | boolean       | `false`        | `true`, `false`                                         | Enables multiple GraphQL operations in single HTTP request           |
 | `{SERVICE}_SERVICE_TOKEN`             | string        | *optional*     | -                                                       | Backend micro service access token, example: PRODUCTS_SERVICE_TOKEN  |
+| **Circuit Breaker Configuration**     |
+| `CIRCUIT_BREAKER_FAILURE_THRESHOLD`   | number        | `5`            | -                                                       | Consecutive failures required to trip circuit breaker                |
+| `CIRCUIT_BREAKER_RECOVERY_TIMEOUT`    | number        | `60000`        | -                                                       | Time in milliseconds to wait before attempting recovery              |
+| `CIRCUIT_BREAKER_MONITORING_PERIOD`   | number        | `10000`        | -                                                       | Time window for failure rate evaluation (milliseconds)               |
+| `CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS` | number        | `3`            | -                                                       | Maximum test requests during recovery phase                          |
+| `CIRCUIT_BREAKER_MINIMUM_CALLS`       | number        | `10`           | -                                                       | Minimum requests before circuit breaker can activate                 |
 | **Apollo Armour Security**            |
 | `ENABLE_BLOCK_FIELD_SUGGESTION`       | boolean       | `true`         | `true`, `false`                                         | Prevents GraphQL field name suggestions                              |
 | `BLOCK_FIELD_SUGGESTION_MASK`         | string        | `<[REDACTED]>` | -                                                       | Replacement text for blocked field suggestions                       |
@@ -117,12 +139,40 @@ The application uses environment-based configuration with Zod validation. Key co
 - **JSON variables** accept JSON string format for complex headers configuration
 - **Optional variables** can be omitted; features will be disabled if related URLs are not provided
 
+### Circuit Breaker Configuration
+
+The circuit breaker system provides intelligent protection for subgraph services with configurable parameters:
+
+#### Failure Detection
+- **Failure Threshold**: Number of consecutive failures to trip the circuit (default: 5)
+- **Minimum Calls**: Required requests before circuit can activate (default: 10)
+- **Monitoring Period**: Time window for failure evaluation (default: 10 seconds)
+
+#### Recovery Behaviour
+- **Recovery Timeout**: Wait time before testing recovery (default: 60 seconds)
+- **Half-Open Max Calls**: Test requests during the recovery phase (default: 3)
+
+#### Error Classification
+The circuit breaker intelligently classifies errors to prevent false positives:
+
+**Infrastructure Failures (Trip Circuit):**
+- Network errors (ECONNREFUSED, ENOTFOUND, ETIMEDOUT)
+- HTTP 5xx server errors (500, 502, 503, 504)
+- Infrastructure 4xx errors (408, 429, 503, 504)
+- Connection timeouts and network issues
+
+**Business Logic Errors (Pass Through):**
+- HTTP 4xx client errors (400, 401, 403, 404)
+- GraphQL validation errors
+- Application-specific errors
+
+
 ### Supergraph Configuration
 
 Create a `supergraph.yaml` file defining your subgraph services:
 
 ```yaml
-federation_version: =2.0.0
+federation_version: 2
 subgraphs:
   users:
     routing_url: http://localhost:4001/graphql
@@ -131,7 +181,9 @@ subgraphs:
   products:
     routing_url: http://localhost:4002/graphql
     schema:
-      file: ./subgraphs/products.graphql
+      subgraph_url: http://localhost:4002/graphql
+      introspection_headers:
+        x-service-name: graphql-gateway
 ```
 
 ## 🚀 Usage
@@ -178,7 +230,7 @@ subgraphs:
 
 - **URL**: `GET /healthcheck`
 - **Description**: Service health and status information
-- **Response**: Service status, uptime, version, memory usage
+- **Response**: Service status, uptime, version, circuit breaker status, memory usage
 
 ### Telemetry Status (Development Only)
 

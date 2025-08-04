@@ -46,20 +46,6 @@ You can also build and run the Docker image manually:
     graphql-gateway:latest
 ```
 
-## Environment Variables
-
-The Docker setup supports all environment variables defined in the application. Key variables include:
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NODE_ENV` | Environment mode | `production` |
-| `PORT` | HTTP server port | `8080` |
-| `LOG_LEVEL` | Logging verbosity | `warn` |
-| `SERVICE_NAME` | Service identifier | `graphql-gateway` |
-| `CORS_ALLOWED_DOMAIN` | Allowed CORS domains | `localhost` |
-
-For a complete list of environment variables, refer to the `.env.template` file.
-
 ## Security Features
 
 The Docker setup includes several security best practices:
@@ -127,7 +113,7 @@ spec:
 
 ### Custom Build Arguments
 
-You can customize the build process using build arguments:
+You can customise the build process using build arguments:
 
 ```bash
    docker build \

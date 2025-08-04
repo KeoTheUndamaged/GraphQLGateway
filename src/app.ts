@@ -29,11 +29,12 @@ import corsOptions from './configuration/corsOptions';
 import helmetOptions from './configuration/helmetOptions';
 import rateLimitOptions from './configuration/rateLimitOptions';
 import formatError from './configuration/apolloFormatErrorOptions';
+import {buildService} from './utils/graphqlBuildService';
 
 // ===== REQUEST HANDLERS & MIDDLEWARE =====
 import healthcheckHandler from './handlers/healthcheck';
 import { createErrorHandler } from './middleware/errorHandlerMiddleware';
-import {buildService} from './utils/graphqlBuildService';
+
 
 export const createApp = async () => {
     const app: Express = express();
@@ -135,7 +136,7 @@ export const createApp = async () => {
      */
     const gateway: ApolloGateway = new ApolloGateway({
         supergraphSdl: supergraphSdl,
-        buildService
+        buildService: buildService
     });
 
     /**

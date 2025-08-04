@@ -71,6 +71,7 @@ const safeErrorCodes = [
     'UNAUTHENTICATED',
     'FORBIDDEN',
     'GRAPHQL_VALIDATION_FAILED',
+    'SERVICE_UNAVAILABLE'
 ];
 
 /**

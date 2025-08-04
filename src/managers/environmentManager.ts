@@ -202,7 +202,7 @@ const schema: ZodObject = z.object({
      *
      * Operational Benefits:
      * - Correlate issues with specific deployments
-     * - Enable precise rollback to previous versions
+     * - Enable a precise rollback to previous versions
      * - Track feature rollout and adoption
      * - Support A/B testing and canary deployments
      *
@@ -224,7 +224,7 @@ const schema: ZodObject = z.object({
      *
      * Security Impact: CRITICAL - Controls which web origins can access your API
      * - Prevents malicious websites from accessing your API
-     * - Protects against CSRF attacks via browser same-origin policy
+     * - Protects against CSRF attacks via a browser same-origin policy
      * - Must be precisely configured for your frontend domain
      *
      * Common Mistakes:
@@ -864,6 +864,142 @@ const schema: ZodObject = z.object({
      */
     OPEN_TELEMETRY_SAMPLING_RATE: z.string().transform(numberTransformer).pipe(z.number().min(0).max(1)).default(1),
 
+    /** Circuit Breaker Configuration **/
+
+    /**
+     * CIRCUIT_BREAKER_FAILURE_THRESHOLD - Maximum Consecutive Failures
+     *
+     * Number of consecutive failures required to trip the circuit breaker from CLOSED to OPEN state.
+     * This is the primary trigger for circuit breaker activation during service degradation.
+     *
+     * Behavior:
+     * - Circuit remains CLOSED while failures < threshold
+     * - Circuit trips to OPEN when failures >= threshold
+     * - Only consecutive failures count (success resets counter)
+     * - Must also meet MINIMUM_CALLS requirement
+     *
+     * Tuning Guidelines:
+     * - Lower values (3-5): More sensitive, faster protection, may cause false positives
+     * - Higher values (10-15): Less sensitive, slower protection, more resilient to transient issues
+     * - Consider your service's typical error patterns and SLA requirements
+     *
+     * Production Considerations:
+     * - Balance between protection speed and false positive avoidance
+     * - Monitor circuit breaker activation frequency to tune appropriately
+     * - Consider different thresholds for different services based on criticality
+     *
+     * Default: 5 - Balanced sensitivity for most GraphQL subgraph scenarios
+     */
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.string().transform(numberTransformer).pipe(z.number()).default(5),
+
+    /**
+     * CIRCUIT_BREAKER_RECOVERY_TIMEOUT - Circuit Recovery Wait Time
+     *
+     * Time in milliseconds to wait before attempting recovery from OPEN to HALF_OPEN state.
+     * Determines how long the circuit breaker stays open before testing service recovery.
+     *
+     * Recovery Process:
+     * - Circuit stays OPEN for this duration after tripping
+     * - After the timeout expires, circuit moves to HALF_OPEN
+     * - HALF_OPEN allows limited test requests to check service health
+     * - Successful tests return circuit to CLOSED state
+     *
+     * Tuning Guidelines:
+     * - Shorter timeouts (10-30 seconds): Faster recovery, more frequent retry attempts
+     * - Longer timeouts (1-5m): Less aggressive recovery, reduces the load on failing services
+     * - Consider your service's typical recovery patterns and deployment cycles
+     *
+     * Production Considerations:
+     * - Balance between fast recovery and giving failing services time to recover
+     * - Consider downstream service startup times and health check intervals
+     * - Align with your incident response and service recovery procedures
+     *
+     * Default: 6,0000 ms (1 minute) - Conservative recovery time for production stability
+     */
+    CIRCUIT_BREAKER_RECOVERY_TIMEOUT: z.string().transform(numberTransformer).pipe(z.number()).default(60000),
+
+    /**
+     * CIRCUIT_BREAKER_MONITORING_PERIOD - Failure Rate Calculation Window
+     *
+     * Time window in milliseconds for calculating failure rates and resetting counters.
+     * Provides a sliding window for circuit breaker state evaluation.
+     *
+     * Monitoring Behavior:
+     * - Failure counts are evaluated within this time window
+     * - Prevents indefinite accumulation of old failure data
+     * - Enables circuit breaker to recover from historical failures
+     * - Provides more responsive behaviour to changing service conditions
+     *
+     * Tuning Guidelines:
+     * - Shorter periods (5-15 seconds): More responsive to immediate conditions
+     * - Longer periods (30-60 seconds): More stable, less reactive to brief spikes
+     * - Should be shorter than RECOVERY_TIMEOUT for optimal behaviour
+     *
+     * Production Considerations:
+     * - Align with your monitoring and alerting intervals
+     * - Consider traffic patterns and request frequency
+     * - Balance between responsiveness and stability
+     *
+     * Default: 10,000 ms (10 seconds) - Responsive monitoring for GraphQL workloads
+     */
+    CIRCUIT_BREAKER_MONITORING_PERIOD: z.string().transform(numberTransformer).pipe(z.number()).default(10000),
+
+    /**
+     * CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS - Recovery Test Request Limit
+     *
+     * Maximum number of test requests allowed when circuit is in HALF_OPEN state.
+     * Controls how many requests are used to determine if service has recovered.
+     *
+     * Half-Open Behavior:
+     * - After recovery timeout, circuit moves to HALF_OPEN
+     * - Up to this many requests are allowed through for testing
+     * - If all test requests succeed, circuit returns to CLOSED
+     * - If any test request fails, circuit immediately returns to OPEN
+     *
+     * Tuning Guidelines:
+     * - Lower values (1-3): Faster decision-making, less load on recovering service
+     * - Higher values (5-10): More thorough testing, higher confidence in recovery
+     * - Consider your service's consistency and the cost of failed requests
+     *
+     * Production Considerations:
+     * - Balance between thorough testing and minimising load on recovering services
+     * - Consider the impact of test failures on user experience
+     * - Align with your service's health check patterns
+     *
+     * Default: 3 - Conservative testing that minimises load while ensuring confidence
+     */
+    CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS: z.string().transform(numberTransformer).pipe(z.number()).default(3),
+
+    /**
+     * CIRCUIT_BREAKER_MINIMUM_CALLS - Minimum Requests Before Circuit Activation
+     *
+     * Minimum number of requests required within the monitoring period before circuit breaker can trip.
+     * Prevents circuit breaker activation during low-traffic periods or startup.
+     *
+     * Protection Against:
+     * - False positives during service startup or low traffic
+     * - Circuit breaker activation from isolated failures
+     * - Premature circuit tripping before statistically significant data
+     *
+     * Behavior:
+     * - Circuit breaker only evaluates a failure threshold after this many calls
+     * - Provides statistical significance for failure rate calculations
+     * - Prevents circuit activation during legitimate low-traffic periods
+     *
+     * Tuning Guidelines:
+     * - Lower values (5-10): More sensitive, faster activation in low-traffic scenarios
+     * - Higher values (20-50): More conservative, requires higher traffic for activation
+     * - Consider your typical traffic patterns and request volumes
+     *
+     * Production Considerations:
+     * - Balance between protection and false positive prevention
+     * - Consider different traffic patterns (peak vs off-peak)
+     * - Align with your service's typical request volumes
+     *
+     * Default: 10 - Balanced threshold that works for most GraphQL gateway scenarios
+     */
+    CIRCUIT_BREAKER_MINIMUM_CALLS: z.string().transform(numberTransformer).pipe(z.number()).default(10),
+
     /**
      * Backend Service Tokens
      *
@@ -982,7 +1118,6 @@ export const serverConfiguration = {
     serviceVersion: env.SERVICE_VERSION as string,
 }
 
-
 /**
  * CORS Configuration
  *
@@ -1062,6 +1197,19 @@ export const openTelemetryConfiguration = {
 }
 
 /**
+ * Circuit Breaker Configuration
+ *
+ * Circuit breaker settings.
+ */
+export const circuitBreakerConfiguration = {
+    failureThreshold: env.CIRCUIT_BREAKER_FAILURE_THRESHOLD as number,
+    recoveryTimeout: env.CIRCUIT_BREAKER_RECOVERY_TIMEOUT as number,
+    monitoringPeriod: env.CIRCUIT_BREAKER_MONITORING_PERIOD as number,
+    halfOpenMaxCalls: env.CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS as number,
+    minimumCalls: env.CIRCUIT_BREAKER_MINIMUM_CALLS as number,
+}
+
+/**
  * PRODUCTION DEPLOYMENT CHECKLIST:
  *
  * 1. ✅ Set NODE_ENV=production
@@ -1072,7 +1220,8 @@ export const openTelemetryConfiguration = {
  * 6. ✅ Set LOG_LEVEL to 'warn' or 'error' for production
  * 7. ✅ Enable all Apollo Armor security features
  * 8. ✅ Configure OpenTelemetry endpoints if observability is needed
- * 9. ✅ Test configuration validation with invalid values
+ * 9. ✅ Tune circuit breaker settings for your service dependencies
+ * 10. ✅ Test configuration validation with invalid values
  *
  * ENVIRONMENT-SPECIFIC SETTINGS:
  *
@@ -1085,6 +1234,8 @@ export const openTelemetryConfiguration = {
  * - RATE_LIMIT_MAX=1000 (higher for development)
  * - ENABLE_OPEN_TELEMETRY_TRACES=true (optional)
  * - OPEN_TELEMETRY_SAMPLING_RATE=1.0
+ * - CIRCUIT_BREAKER_FAILURE_THRESHOLD=3 (more sensitive for testing)
+ * - CIRCUIT_BREAKER_RECOVERY_TIMEOUT=10000 (10s - faster recovery)
  *
  * Staging:
  * - NODE_ENV=uat or candidate
@@ -1094,6 +1245,7 @@ export const openTelemetryConfiguration = {
  * - Production-like rate limits
  * - ENABLE_OPEN_TELEMETRY_METRICS=true
  * - OPEN_TELEMETRY_SAMPLING_RATE=0.1
+ * - Production-like circuit breaker settings
  *
  * Production:
  * - NODE_ENV=production
@@ -1104,6 +1256,31 @@ export const openTelemetryConfiguration = {
  * - RATE_LIMIT_MAX=100 (adjust based on usage)
  * - All security features enabled (defaults are secure)
  * - OPEN_TELEMETRY_SAMPLING_RATE=0.01-0.1 (1-10%)
+ * - CIRCUIT_BREAKER_FAILURE_THRESHOLD=5 (balanced sensitivity)
+ * - CIRCUIT_BREAKER_RECOVERY_TIMEOUT=60000 (1 minute)
+ * - CIRCUIT_BREAKER_MINIMUM_CALLS=10 (prevent false positives)
+ *
+ * CIRCUIT BREAKER TUNING GUIDELINES:
+ *
+ * High-Traffic Services:
+ * - CIRCUIT_BREAKER_MINIMUM_CALLS=20-50 (more statistical significance)
+ * - CIRCUIT_BREAKER_MONITORING_PERIOD=5000 (5s - more responsive)
+ * - CIRCUIT_BREAKER_FAILURE_THRESHOLD=3-5 (faster protection)
+ *
+ * Low-Traffic Services:
+ * - CIRCUIT_BREAKER_MINIMUM_CALLS=5-10 (faster activation)
+ * - CIRCUIT_BREAKER_MONITORING_PERIOD=30000 (30s - longer evaluation)
+ * - CIRCUIT_BREAKER_FAILURE_THRESHOLD=3-7 (account for lower volume)
+ *
+ * Critical Dependencies:
+ * - CIRCUIT_BREAKER_FAILURE_THRESHOLD=3 (more sensitive)
+ * - CIRCUIT_BREAKER_RECOVERY_TIMEOUT=30000 (30s - faster recovery attempts)
+ * - CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS=1 (minimal testing load)
+ *
+ * Non-Critical Dependencies:
+ * - CIRCUIT_BREAKER_FAILURE_THRESHOLD=7-10 (less sensitive)
+ * - CIRCUIT_BREAKER_RECOVERY_TIMEOUT=120000 (2 minutes - give more time)
+ * - CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS=5 (thorough recovery testing)
  *
  * SECURITY BEST PRACTICES:
  *
@@ -1116,4 +1293,22 @@ export const openTelemetryConfiguration = {
  * - Monitor rate limiting effectiveness and adjust as needed
  * - Set up alerts for security feature violations
  * - Test Apollo Armor configurations under load
+ * - Monitor circuit breaker activation patterns for service health insights
+ * - Alert on frequent circuit breaker trips (indicates service issues)
+ * - Track circuit breaker recovery times for SLA monitoring
+ *
+ * OPERATIONAL MONITORING:
+ *
+ * Circuit Breaker Metrics to Monitor:
+ * - Circuit breaker state transitions (CLOSED → OPEN → HALF_OPEN)
+ * - Failure rates and patterns leading to circuit activation
+ * - Recovery success rates and timing
+ * - Fallback response usage frequency
+ * - Impact on overall system performance and user experience
+ *
+ * Alerting Recommendations:
+ * - Circuit breaker OPEN state lasting > 5 minutes
+ * - Multiple circuit breakers opening simultaneously
+ * - High frequency of circuit state changes (flapping)
+ * - Fallback responses exceeding acceptable thresholds
  */
