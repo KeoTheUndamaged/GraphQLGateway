@@ -14,9 +14,6 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nodejs
 
-## Install build dependencies
-#RUN apk add --no-cache python3 make g++
-
 # Copy package files first (for better layer caching)
 COPY package*.json ./
 COPY .npmrc ./
