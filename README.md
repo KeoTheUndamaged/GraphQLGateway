@@ -260,6 +260,16 @@ The application is container-ready with:
 - **Process Monitoring** - Unhandled error recovery
 - **Zero-downtime Updates** - Rolling deployment support
 
+A complete Docker setup is provided with:
+
+- **Multi-stage Dockerfile** - Optimised for minimal image size and security
+- **Docker Compose** - Easy local deployment and testing
+- **Security Hardening** - Non-root user, dependency pruning, minimal base image
+- **Resource Limits** - Prevents resource exhaustion
+- **Health Checks** - Automatic container recovery
+
+For detailed Docker instructions, see [DOCKER.md](DOCKER.md).
+
 ### Environment-specific Configuration
 
 - **Development** - Full introspection, detailed errors, debug logging

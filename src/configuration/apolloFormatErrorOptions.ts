@@ -93,6 +93,17 @@ const safeErrorCodes = [
  * @returns A formatted error object that is safe for production.
  */
 const formatErrorForProduction = (err: GraphQLFormattedError): GraphQLFormattedError => {
+    // Handle introspection disabled errors specifically
+    if (err.extensions?.code === 'GRAPHQL_VALIDATION_FAILED' &&
+        err.message.includes('introspection is not allowed')) {
+        return {
+            message: 'GraphQL introspection is disabled',
+            extensions: {
+                code: 'INTROSPECTION_DISABLED',
+                timestamp: new Date().toISOString(),
+            },
+        };
+    }
     // Attempt to extract a nested error from a Gateway response first
     try {
         const subgraphResponse = (err.extensions as any)?.response?.body;

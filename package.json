@@ -40,7 +40,7 @@
     "zod": "^4.0.14"
   },
   "devDependencies": {
-    "@apollo/rover": "^0.34.1",
+    "@apollo/rover": "^0.35.0",
     "@escape.tech/graphql-armor-types": "^0.7.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
