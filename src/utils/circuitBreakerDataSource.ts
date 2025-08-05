@@ -1,33 +1,37 @@
-/**
- * Circuit Breaker Enhanced GraphQL Data Source
- *
- * This class extends Apollo Gateway's RemoteGraphQLDataSource to provide intelligent
- * circuit breaker protection for GraphQL subgraph communications. It prevents cascade
- * failures and provides graceful degradation when subgraph services are unavailable.
- *
- * Key Features:
- * - Intelligent error classification (infrastructure vs business logic)
- * - Circuit breaker pattern implementation for service resilience
- * - Graceful fallback responses during service outages
- * - Comprehensive logging for operational visibility
- * - GraphQL-aware error handling and response structure preservation
- *
- * Circuit Breaker States:
- * - CLOSED: Normal operation, requests pass through
- * - OPEN: Service is failing, requests are blocked, and fallback is used
- * - HALF_OPEN: Testing if service has recovered, limited requests allowed
- *
- * Error Classification Strategy:
- * - Infrastructure failures (5xx, timeouts, connection errors) → Trip circuit breaker
- * - Business logic errors (404, validation errors) → Pass through normally
- * - Unknown errors → Default to infrastructure failure (fail-safe)
- */
-
 import { RemoteGraphQLDataSource } from '@apollo/gateway';
 import { circuitBreakerManager } from '../managers/circuitBreakerManager';
 import { createLogger } from '../managers/loggerManager';
 import { serverConfiguration } from '../managers/environmentManager';
 
+/**
+ * Custom Error Classes for Circuit Breaker Data Source
+ */
+
+/**
+ * Invalid GraphQL Response Error
+ *
+ * Thrown when a response doesn't conform to GraphQL specification structure.
+ * This error type is always treated as an infrastructure failure.
+ */
+class InvalidGraphQLResponseError extends Error {
+    public readonly code = 'INVALID_GRAPHQL_RESPONSE';
+    public readonly serviceName: string;
+    public readonly originalResult: any;
+
+    constructor(serviceName: string, originalResult?: any, message: string = 'Invalid GraphQL response structure') {
+        super(message);
+        this.name = 'InvalidGraphQLResponseError';
+        this.serviceName = serviceName;
+        this.originalResult = originalResult;
+    }
+}
+
+/**
+ * Circuit Breaker Enhanced Data Source
+ *
+ * Extends Apollo Gateway's RemoteGraphQLDataSource with intelligent circuit breaker
+ * functionality that distinguishes between infrastructure failures and business logic errors.
+ */
 export class CircuitBreakerDataSource extends RemoteGraphQLDataSource {
     /**
      * Circuit breaker instance for this specific subgraph service
@@ -45,7 +49,7 @@ export class CircuitBreakerDataSource extends RemoteGraphQLDataSource {
      * Service name for this subgraph (e.g. 'products', 'users', 'orders')
      * Used for logging, metrics, and error messaging
      */
-    private serviceName: string;
+    private readonly serviceName: string;
 
     /**
      * Constructor: Initialise Circuit Breaker Enhanced Data Source
@@ -135,24 +139,10 @@ export class CircuitBreakerDataSource extends RemoteGraphQLDataSource {
                     /**
                      * GraphQL Response Structure Validation
                      *
-                     * Ensures the response follows GraphQL specification structure.
-                     * Valid responses must have 'data' and/or 'errors' fields.
-                     *
-                     * This check prevents malformed responses from being treated as successful,
-                     * which could mask infrastructure issues.
+                     * Validates the response using a dedicated method that throws
+                     * a specific error type for invalid responses.
                      */
-                    if (this.isValidGraphQLResponse(result)) {
-                        return result;
-                    }
-
-                    /**
-                     * Invalid Response Structure Handling
-                     *
-                     * If the response doesn't follow the GraphQL structure, it indicates
-                     * an infrastructure problem (proxy errors, malformed responses, etc.)
-                     * rather than a business logic issue.
-                     */
-                    throw new Error('Invalid GraphQL response structure');
+                    return this.validateAndProcessResponse(result);
                 } catch (error: any) {
                     /**
                      * Critical Error Classification Logic
@@ -228,6 +218,31 @@ export class CircuitBreakerDataSource extends RemoteGraphQLDataSource {
     }
 
     /**
+     * Response Validation and Processing
+     *
+     * Separated validation logic that throws a specific error type for invalid responses.
+     * This addresses the code quality issue by making the error handling more explicit.
+     *
+     * @param result - Response from the upstream GraphQL service
+     * @returns The validated result
+     * @throws InvalidGraphQLResponseError if response structure is invalid
+     */
+    private validateAndProcessResponse(result: any): any {
+        if (this.isValidGraphQLResponse(result)) {
+            return result;
+        }
+
+        // Log the invalid response for debugging
+        this.logger.error('Invalid GraphQL response structure detected', {
+            service: this.serviceName,
+            result: result
+        });
+
+        // Throw specific error type that will be properly classified
+        throw new InvalidGraphQLResponseError(this.serviceName, result);
+    }
+
+    /**
      * GraphQL Response Structure Validation
      *
      * Validates that a response object conforms to the GraphQL specification structure.
@@ -266,12 +281,13 @@ export class CircuitBreakerDataSource extends RemoteGraphQLDataSource {
      * trigger circuit breaker failure counting or be treated as a normal business response.
      *
      * Classification Strategy:
-     * 1. Network/Connection Errors → Infrastructure failure
-     * 2. HTTP 5xx Status Codes → Infrastructure failure
-     * 3. HTTP 4xx Infrastructure Codes (408, 429, 503, 504) → Infrastructure failure
-     * 4. HTTP 4xx Business Logic Codes (400, 401, 403, 404) → Business logic
-     * 5. Error Message Pattern Matching → Infrastructure failure
-     * 6. Unknown/Unclassifiable Errors → Infrastructure failure (fail-safe)
+     * 1. Custom Error Types → Check specific error instances
+     * 2. Network/Connection Errors → Infrastructure failure
+     * 3. HTTP 5xx Status Codes → Infrastructure failure
+     * 4. HTTP 4xx Infrastructure Codes (408, 429, 503, 504) → Infrastructure failure
+     * 5. HTTP 4xx Business Logic Codes (400, 401, 403, 404) → Business logic
+     * 6. Error Message Pattern Matching → Infrastructure failure
+     * 7. Unknown/Unclassifiable Errors → Infrastructure failure (fail-safe)
      *
      * This classification prevents business logic errors like "Product not found"
      * from triggering circuit breaker activation while still protecting against
@@ -281,6 +297,16 @@ export class CircuitBreakerDataSource extends RemoteGraphQLDataSource {
      * @returns boolean - True if error represents infrastructure failure
      */
     private isInfrastructureFailure(error: any): boolean {
+        /**
+         * Custom Error Type Classification
+         *
+         * Handle our specific error types that should always be treated
+         * as infrastructure failures.
+         */
+        if (error instanceof InvalidGraphQLResponseError) {
+            return true;
+        }
+
         /**
          * Network and Connection Error Detection
          *
