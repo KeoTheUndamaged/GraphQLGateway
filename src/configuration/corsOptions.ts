@@ -68,6 +68,9 @@ const allowedOrigins = (origin: string | undefined, callback: (err: Error | null
                 .split(',')
                 .map(domain => domain.trim())
                 .filter(domain => domain.length > 0);
+        } else if (serverConfiguration.nodeEnv === 'test') {
+            // Test: Allow made-up domains for Jest tests
+            allowedDomains = ['example.com', 'test.com'];
         } else {
             // Development: Allow localhost
             allowedDomains = ['localhost'];

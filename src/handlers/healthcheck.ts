@@ -71,8 +71,7 @@ interface Healthcheck {
  */
 const healthcheck = (_req: Request, res: Response) => {
 
-    const circruitBreakerHealth = circuitBreakerManager.getHealthStatus();
-
+    const circuitBreakerHealth = circuitBreakerManager.getHealthStatus();
     const body: Healthcheck = {
         /**
          * Service Status Assessment
@@ -86,7 +85,7 @@ const healthcheck = (_req: Request, res: Response) => {
          * - Subgraph availability
          * - Resource utilisation thresholds
          */
-        status: circruitBreakerHealth.healthy ? 'OK' : 'DEGRADED',
+        status: circuitBreakerHealth.healthy ? 'OK' : 'DEGRADED',
         /**
          * Status Message
          *
@@ -136,10 +135,10 @@ const healthcheck = (_req: Request, res: Response) => {
             version: serverConfiguration.serviceVersion,
         },
         circuitBreakers: {
-            healthy: circruitBreakerHealth.healthy,
-            openCircuits: circruitBreakerHealth.openCircuits,
-            totalCircuits: circruitBreakerHealth.totalCircuits,
-            details: circruitBreakerHealth.stats
+            healthy: circuitBreakerHealth.healthy,
+            openCircuits: circuitBreakerHealth.openCircuits,
+            totalCircuits: circuitBreakerHealth.totalCircuits,
+            details: circuitBreakerHealth.stats
         }
     }
     /**

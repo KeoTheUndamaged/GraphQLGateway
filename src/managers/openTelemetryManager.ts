@@ -79,7 +79,7 @@ class OpenTelemetryManager {
         this.logger = createLogger(serverConfiguration.logLevel);
         this.config = this.validateConfiguration();
 
-        // Set up process handlers if we're going to initialize
+        // Set up process handlers if we're going to initialise
         if (this.config.shouldInitialise) {
             this.setupProcessHandlers();
         }

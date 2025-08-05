@@ -14,7 +14,7 @@ import rateLimit from 'express-rate-limit';
 import { ApolloArmor } from '@escape.tech/graphql-armor';
 
 // ===== APOLLO GRAPHQL FEDERATION =====
-import {ApolloGateway} from '@apollo/gateway';
+import { ApolloGateway } from '@apollo/gateway';
 import { ApolloServer } from '@apollo/server';
 import { InMemoryLRUCache } from '@apollo/utils.keyvaluecache';
 
@@ -106,7 +106,7 @@ export const createApp = async () => {
      * - Version control this file for rollback capability
      * - Monitor file size and complexity
      *
-     * Error Handling: File read failures will crash the application at startup,
+     * Error Handling: File read failures will crash the application at the startup,
      * which is the desired behaviour (fail-fast principle).
      */
     const supergraphSdl = readFileSync(path.join(__dirname, '../supergraph.graphql'), 'utf-8');
@@ -115,8 +115,8 @@ export const createApp = async () => {
      * Apollo Gateway Initialisation
      *
      * Creates the Apollo Federation Gateway that handles:
-     * - Query planning: Determines which subgraphs to query
-     * - Query execution: Coordinates requests to multiple subgraphs
+     * - Query planning: Determines which subgraphes to query
+     * - Query execution: Coordinates requests to multiple subgraphes
      * - Result composition: Merges responses from multiple services
      * - Entity resolution: Handles federated entity relationships
      *
@@ -170,8 +170,8 @@ export const createApp = async () => {
              * Provides significant performance improvements by caching expensive query results.
              *
              * Cache Strategy: LRU (Least Recently Used)
-             * - Most recently accessed items stay in cache
-             * - Least recently used items are evicted when cache is full
+             * - Most recently accessed items stay in a cache
+             * - Least recently used items are evicted when the cache is full
              * - Optimal for workloads with locality of reference
              *
              * Performance Benefits:
@@ -227,7 +227,7 @@ export const createApp = async () => {
                  * - Analytics data: 60-900 seconds (1-15 minutes)
                  *
                  * Federation Considerations:
-                 * - Different subgraphs may have different data volatility
+                 * - Different subgraphes may have different data volatility
                  * - Cache TTL should match the fastest-changing data in the query
                  * - Consider cache invalidation strategies for critical updates
                  *
@@ -412,7 +412,7 @@ export const createApp = async () => {
      * Provides comprehensive request/response logging for monitoring and debugging.
      *
      * Logged Information:
-     * - HTTP method and URL
+     * - HTTP method and address
      * - Response status code and size
      * - Response time
      * - User agent and referrer
@@ -429,10 +429,39 @@ export const createApp = async () => {
      * - Structured JSON format for log aggregation
      * - Configurable log levels by environment
      */
-    app.use(morgan('combined', {
-        stream: {
-            write: (message: string) => logger.http(message.trim())
-        },
+    app.use(morgan((tokens, req, res) => {
+        const getString = (fn: any): string => {
+            try {
+                return typeof fn === 'function' ? (fn(req, res) || '-') : '-';
+            } catch {
+                return '-';
+            }
+        };
+
+        const getNumber = (fn: any, defaultValue: number = 0): number => {
+            try {
+                const value = typeof fn === 'function' ? fn(req, res) : null;
+                return value ? parseFloat(value) || defaultValue : defaultValue;
+            } catch {
+                return defaultValue;
+            }
+        };
+
+        const logData = {
+            method: getString(tokens.method),
+            url: getString(tokens.url),
+            status: getNumber(tokens.status, 0),
+            contentLength: getString(tokens.res?.bind(tokens, req, res, 'content-length')),
+            responseTime: getNumber(tokens['response-time']),
+            remoteAddr: getString(tokens['remote-addr']),
+            userAgent: getString(tokens['user-agent']),
+            referrer: getString(tokens.referrer),
+            timestamp: new Date().toISOString(),
+            httpVersion: getString(tokens['http-version']) || '1.1'
+        };
+
+        logger.http('HTTP Request', logData);
+        return null;
     }));
 
     /**
@@ -675,7 +704,7 @@ export const startServer = async (): Promise<void> => {
              *
              * Error Types:
              * - unhandledRejection: Promise rejections without .catch()
-             * - uncaughtException: Synchronous errors not caught by try/catch
+             * - uncaughtException: Synchronous errors not caught by the try/catch
              *
              * Production Behavior:
              * - Log comprehensive error information

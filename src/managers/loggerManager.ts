@@ -76,7 +76,7 @@ class LoggerManager {
 
             // Stream interface for Morgan HTTP logging integration
             stream: {
-                write: (message: string) => this.logger.http(message.trim()),
+                write: (message: string) => this.logger.info(message.trim()),
             },
         }
     }

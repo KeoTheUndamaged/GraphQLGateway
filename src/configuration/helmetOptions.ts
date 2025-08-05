@@ -27,7 +27,7 @@ import {graphqlConfiguration} from '../managers/environmentManager';
  * Balances maximum security with GraphQL API functionality.
  * Conditionally relaxes policies for development tools (GraphQL Playground).
  */
-const helmetOptions: Readonly<HelmetOptions> | undefined = {
+const helmetOptions: Readonly<HelmetOptions> = {
     /**
      * Cross-Origin Embedder Policy (COEP)
      *
