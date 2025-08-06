@@ -406,10 +406,80 @@ export const createApp = async () => {
      */
     app.use(rateLimit(rateLimitOptions));
 
-    // Session middleware (required for Keycloak)
+    /**
+     * Express Session Middleware Configuration
+     *
+     * Configures Express session management required by the Keycloak Connect adapter.
+     * Even though we're primarily using JWT token-based authentication, keycloak-connect
+     * still requires session support for certain internal operations.
+     *
+     * Session Requirements for Keycloak:
+     * - Stores temporary authentication state during OAuth flows
+     * - Maintains CSRF protection tokens
+     * - Caches user information to reduce Keycloak server calls
+     * - Handles logout and session invalidation
+     *
+     * Security Features:
+     * - Session cookies are signed with KEYCLOAK_SESSION_SECRET
+     * - Secure cookie settings based on NODE_ENV
+     * - Memory store for development (not suitable for production clustering)
+     * - Configurable session expiration (24 hours default)
+     *
+     * Production Considerations:
+     * - Replace MemoryStore with Redis/Database store for clustering
+     * - Configure a proper session clean-up and garbage collection
+     * - Monitor session store memory usage
+     * - Consider session replication for high availability
+     *
+     * Why Required:
+     * - Keycloak Connect an adapter depends on Express sessions internally
+     * - Required even for stateless JWT authentication scenarios
+     * - Provides fallback authentication state management
+     * - Enables proper logout and session termination
+     */
     app.use(sessionConfig);
 
-    // Initialize Keycloak middleware
+    /**
+     * Keycloak Connect Middleware Initialisation
+     *
+     * Initialises the Keycloak Connect adapter middleware that provides core
+     * authentication infrastructure. This middleware sets up the foundation
+     * for Keycloak integration but doesn't enforce authentication on all routes.
+     *
+     * Middleware Responsibilities:
+     * - Establishes connection to Keycloak server
+     * - Configures OIDC/OAuth2 client credentials
+     * - Sets up JWKS certificate caching for token verification
+     * - Initialises session-based authentication state management
+     * - Prepares authentication context for downstream middleware
+     *
+     * What This Does NOT Do:
+     * - Does not protect routes (that are handled by keycloakAuth middleware)
+     * - Does not validate tokens on every request
+     * - Does not enforce authentication policies
+     * - Does not handle authorisation/permissions
+     *
+     * Integration Architecture:
+     * - Creates Keycloak client instance with realm configuration
+     * - Establishes a secure communication channel to Keycloak server
+     * - Caches public keys for JWT signature verification
+     * - Provides authentication utilities to other middleware
+     *
+     * Error Handling:
+     * - Fails gracefully if Keycloak server is temporarily unavailable
+     * - Logs configuration errors for debugging
+     * - Continues to serve requests but authentication will fail
+     *
+     * Performance Considerations:
+     * - Caches JWKS keys to avoid repeated certificate downloads
+     * - Maintains persistent connections to Keycloak server
+     * - Minimal overhead when not actively authenticating
+     *
+     * Security Notes:
+     * - Uses configured SSL requirements for Keycloak communication
+     * - Validates Keycloak server certificates (in production)
+     * - Establishes secure client authentication with Keycloak
+     */
     app.use(keycloak.middleware());
 
 
