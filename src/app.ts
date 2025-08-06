@@ -492,13 +492,17 @@ export const createApp = async () => {
      */
     app.use('/graphql', json(), keycloakAuth, expressMiddleware(server, {
         context: async ({ req, res }: ExpressContextFunctionArgument) => {
+            // Extract the authorization header from the request
+            const authHeader = req.headers.authorization;
+
             return {
                 req,
                 res,
                 user: (req as any).user, // Include user context (guest or authenticated)
+                token: authHeader, // This is what buildService.ts is looking for
             };
         },
-}));
+    }));
 
     /**
      * Health Check Endpoint
