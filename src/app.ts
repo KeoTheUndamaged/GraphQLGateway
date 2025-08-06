@@ -34,6 +34,7 @@ import {buildService} from './utils/graphqlBuildService';
 // ===== REQUEST HANDLERS & MIDDLEWARE =====
 import healthcheckHandler from './handlers/healthcheck';
 import { createErrorHandler } from './middleware/errorHandlerMiddleware';
+import {keycloak, keycloakAuth, sessionConfig} from './middleware/keycloakMiddleware';
 
 
 export const createApp = async () => {
@@ -405,6 +406,13 @@ export const createApp = async () => {
      */
     app.use(rateLimit(rateLimitOptions));
 
+    // Session middleware (required for Keycloak)
+    app.use(sessionConfig);
+
+    // Initialize Keycloak middleware
+    app.use(keycloak.middleware());
+
+
     /**
      * HTTP Request Logging Middleware
      *
@@ -482,11 +490,15 @@ export const createApp = async () => {
      * - Enables authentication, authorisation, and request tracking
      * - Allows custom context enrichment (user data, permissions, etc.)
      */
-    app.use('/graphql', json(), expressMiddleware(server, {
-        context: async ({ req }: ExpressContextFunctionArgument): Promise<{token:string | undefined}> => ({
-            token: req.headers.authorization,
-        })
-    }));
+    app.use('/graphql', json(), keycloakAuth, expressMiddleware(server, {
+        context: async ({ req, res }: ExpressContextFunctionArgument) => {
+            return {
+                req,
+                res,
+                user: (req as any).user, // Include user context (guest or authenticated)
+            };
+        },
+}));
 
     /**
      * Health Check Endpoint

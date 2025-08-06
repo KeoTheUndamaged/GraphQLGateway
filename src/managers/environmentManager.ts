@@ -129,7 +129,7 @@ const schema: ZodObject = z.object({
      *
      * Common Values:
      * - '4000': Default GraphQL port (non-conflicting)
-     * - '3000': Common development port (may conflict with frontend)
+     * - '3000': Common development port (may conflict with a frontend)
      * - '8080': Common containerised deployment port
      * - '80'/'443': Standard HTTP/HTTPS ports (requires elevated privileges)
      *
@@ -171,7 +171,7 @@ const schema: ZodObject = z.object({
     /**
      * SERVICE_NAME - Service Identifier
      *
-     * Unique name for this service in your architecture.
+     * A unique name for this service in your architecture.
      * Used for logging, monitoring, service discovery, and documentation.
      *
      * Examples:
@@ -285,7 +285,7 @@ const schema: ZodObject = z.object({
      * Best Practices:
      * - Enable in development and staging environments
      * - Disable in production unless specifically needed
-     * - Consider IP allowlisting if needed in production
+     * - Consider an IP allowlisting if needed in production
      * - Monitor introspection query usage
      *
      * Default: false - Secure by default, enable explicitly when needed
@@ -481,7 +481,7 @@ const schema: ZodObject = z.object({
     /**
      * MAX_DEPTH_LIMIT - Maximum Query Nesting Level
      *
-     * The deepest level of nesting allowed in GraphQL queries.
+     * The deepest level of nesting is allowed in GraphQL queries.
      * Prevents stack overflow and exponential execution time attacks.
      *
      * Attack Examples:
@@ -831,7 +831,7 @@ const schema: ZodObject = z.object({
      * Considerations:
      * - May be different from trace endpoint
      * - Consider metrics retention and storage costs
-     * - Ensure endpoint can handle your metrics volume
+     * - Ensure an endpoint can handle your metrics volume
      * - Plan for collector high availability
      *
      * Optional: If not provided, metrics will be disabled even if ENABLE_METRICS is true
@@ -999,6 +999,252 @@ const schema: ZodObject = z.object({
      * Default: 10 - Balanced threshold that works for most GraphQL gateway scenarios
      */
     CIRCUIT_BREAKER_MINIMUM_CALLS: z.string().transform(numberTransformer).pipe(z.number()).default(10),
+
+    /** Keycloak Authentication Configuration **/
+
+    /**
+     * KEYCLOAK_REALM - Keycloak Realm Name
+     *
+     * The name of the Keycloak realm that contains your users, clients, and security policies.
+     * A realm is a space where you manage objects, including users, applications, roles, and groups.
+     *
+     * Examples:
+     * - 'master' (default Keycloak realm - not recommended for applications)
+     * - 'production' (custom realm for production environment)
+     * - 'development' (custom realm for development environment)
+     * - 'myapp' (application-specific realm)
+     *
+     * Security Considerations:
+     * - Each realm is completely isolated from others
+     * - Users in one realm cannot access resources in another
+     * - Different realms can have different security policies
+     * - Production and development should use separate realms
+     *
+     * Operational Impact:
+     * - Determines the token issuer URL structure
+     * - Affects JWKS endpoint URLs for token verification
+     * - Groups related users and applications together
+     *
+     * Required: YES - Essential for Keycloak integration
+     */
+    KEYCLOAK_REALM: z.string(),
+
+    /**
+     * KEYCLOAK_URL - Keycloak Server Base URL
+     *
+     * The base URL of your Keycloak server instance.
+     * Used for token endpoints, user authentication, and JWKS certificate retrieval.
+     *
+     * Examples:
+     * - 'http://localhost:8080' (local development)
+     * - 'https://keycloak.example.com' (production deployment)
+     * - 'https://auth.mycompany.com' (custom domain)
+     * - 'http://keycloak:8080' (Docker container network)
+     *
+     * URL Structure Impact:
+     * - Token endpoint: {KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/token
+     * - JWKS endpoint: {KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/certs
+     * - User info endpoint: {KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/userinfo
+     *
+     * Security Considerations:
+     * - HTTPS strongly recommended for production
+     * - HTTP acceptable only for local development
+     * - Ensure network accessibility from your application
+     * - Consider load balancer and CDN configurations
+     *
+     * Required: YES - Essential for all Keycloak communication
+     */
+    KEYCLOAK_URL: z.string(),
+
+    /**
+     * KEYCLOAK_CLIENT_ID - OAuth2/OpenID Connect Client Identifier
+     *
+     * The unique identifier for your application is registered in Keycloak.
+     * This identifies your GraphQL gateway to Keycloak for authentication and authorisation.
+     *
+     * Examples:
+     * - 'graphql-gateway' (simple descriptive name)
+     * - 'api-gateway-prod' (environment-specific)
+     * - 'myapp-backend' (application component specific)
+     * - 'mobile-app-client' (client type specific)
+     *
+     * Client Configuration Impact:
+     * - Determines which scopes and roles are available
+     * - Controls token audience validation
+     * - Affects CORS and redirect URI configurations
+     * - Links to client-specific mappers and policies
+     *
+     * Security Considerations:
+     * - Must match exactly the client ID configured in Keycloak
+     * - Case-sensitive identifier
+     * - Used in a token audience (aud) claim validation
+     * - Different environments should use different client IDs
+     *
+     * Required: YES - Essential for client identification
+     */
+    KEYCLOAK_CLIENT_ID: z.string(),
+
+    /**
+     * KEYCLOAK_SSL_REQUIRED - SSL/TLS Enforcement Level
+     *
+     * Controls when SSL/HTTPS is required for Keycloak communication.
+     * Critical security setting that affects all authentication flows.
+     *
+     * Values:
+     * - 'none': SSL never required (DEVELOPMENT ONLY - NOT SECURE)
+     * - 'external': SSL required for external requests, optional for internal
+     * - 'all': SSL required for all requests (PRODUCTION RECOMMENDED)
+     *
+     * Security Impact: CRITICAL
+     * - 'none': Credentials transmitted in plain text - NEVER use in production
+     * - 'external': Protects against external eavesdropping
+     * - 'all': Maximum security - encrypts all authentication traffic
+     *
+     * Network Considerations:
+     * - 'external': Suitable for containerised environments with secure internal networks
+     * - 'all': Required for public networks and production deployments
+     * - Must match Keycloak server configuration
+     *
+     * Development vs Production:
+     * - Development: 'none' acceptable for local testing
+     * - Staging/Production: Always use 'all'
+     *
+     * Default: No default - must be explicitly set based on the environment
+     */
+    KEYCLOAK_SSL_REQUIRED: z.enum(['none', 'external', 'all']),
+
+    /**
+     * KEYCLOAK_PUBLIC_CLIENT - OAuth2 Client Type Configuration
+     *
+     * Determines whether your application is treated as a public or confidential OAuth2 client.
+     * Affects authentication flow security and token handling requirements.
+     *
+     * Client Types:
+     * - false (confidential): Can securely store credentials (servers, secure backends)
+     * - true (public): Cannot securely store credentials (SPAs, mobile apps)
+     *
+     * Security Implications:
+     * - Confidential: Can use client secrets, more secure token flows
+     * - Public: No client secrets, relies on PKCE and other security measures
+     *
+     * For GraphQL Gateway:
+     * - Typically false (confidential) since it's a backend server
+     * - Can securely store and use client secrets
+     * - Enables more secure authentication flows
+     *
+     * Authentication Flows:
+     * - Confidential: Authorization Code + Client Secret, Direct Access Grants
+     * - Public: Authorization Code + PKCE, Implicit Flow (deprecated)
+     *
+     * Default: false - GraphQL gateways are typically confidential clients
+     */
+    KEYCLOAK_PUBLIC_CLIENT: z.enum(['true', 'false']).transform(booleanTransformer).pipe(z.boolean()).default(false),
+
+    /**
+     * KEYCLOAK_CONFIDENTIAL_PORT - Secure Communication Port
+     *
+     * The port number is used for confidential/secure communication with Keycloak.
+     * Primarily used in older Keycloak versions or specific deployment scenarios.
+     *
+     * Usage Scenarios:
+     * - Legacy Keycloak configurations
+     * - Specific network security requirements
+     * - Multi-port Keycloak deployments
+     * - Container orchestration with port separation
+     *
+     * Common Values:
+     * - 0: Use the same port as the main Keycloak URL (most common)
+     * - 8443: Standard HTTPS port for Keycloak
+     * - 443: Standard HTTPS port
+     * - Custom: Environment-specific port numbers
+     *
+     * Modern Deployments:
+     * - Most modern Keycloak deployments use 0 (same port)
+     * - HTTPS termination typically handled by load balancers
+     * - Container orchestration manages port exposure
+     *
+     * Security Considerations:
+     * - Non-zero values should use HTTPS ports
+     * - Ensure the port is accessible from your application
+     * - Consider a firewall and network security group configurations
+     *
+     * Default: 0 - Use the same port as KEYCLOAK_URL (recommended for most deployments)
+     */
+    KEYCLOAK_CONFIDENTIAL_PORT: z.string().transform(numberTransformer).pipe(z.number().min(0)).default(0),
+
+    /**
+     * KEYCLOAK_ALLOW_UNAUTHENTICATED - Guest Access Control
+     *
+     * Controls whether the application allows unauthenticated (guest) users to access certain resources.
+     * Critical security setting that determines authentication enforcement policy.
+     *
+     * Behaviors:
+     * - false: All requests must be authenticated (strict security)
+     * - true: Unauthenticated requests are allowed as "guest" users
+     *
+     * Use Cases for true:
+     * - Public APIs that support both authenticated and anonymous users
+     * - Gradual authentication (optional login)
+     * - Public content with optional personalization
+     * - Development and testing scenarios
+     *
+     * Security Implications:
+     * - false: Maximum security - prevents unauthorised access
+     * - true: Requires careful authorisation logic in your resolvers
+     *
+     * Implementation Impact:
+     * - false: Returns 401 for missing/invalid tokens
+     * - true: Sets req.user = { isGuest: true } for unauthenticated requests
+     *
+     * GraphQL Context:
+     * - Authenticated: req.user = { isGuest: false, keycloakUser: {...} }
+     * - Guest: req.user = { isGuest: true }
+     *
+     * Production Considerations:
+     * - Carefully review resolver-level authorisation
+     * - Monitor guest user access patterns
+     * - Consider rate limiting for unauthenticated requests
+     *
+     * Default: false - Secure by default, authentication required
+     */
+    KEYCLOAK_ALLOW_UNAUTHENTICATED: z.enum(['true', 'false']).transform(booleanTransformer).pipe(z.boolean()).default(false),
+
+    /**
+     * KEYCLOAK_SESSION_SECRET - Express Session Encryption Key
+     *
+     * Secret key used to encrypt and sign Express.js session cookies.
+     * Required by keycloak-connect middleware for session management.
+     *
+     * Security Requirements:
+     * - Minimum 32 characters long
+     * - Cryptographically random string
+     * - Unique per environment
+     * - Never commit to version control
+     *
+     * Generation Methods:
+     * - Node.js: require('crypto').randomBytes(64).toString('hex')
+     * - OpenSSL: openssl rand -hex 32
+     * - Online generators (ensure HTTPS and reputable sources)
+     *
+     * Security Impact: HIGH
+     * - Used to encrypt session data
+     * - Prevents session tampering and hijacking
+     * - Compromise allows session forgery attacks
+     *
+     * Operational Considerations:
+     * - Changing this value invalidates all existing sessions
+     * - Should be consistent across application instances
+     * - Store securely in environment variables or secret management
+     * - Rotate periodically for enhanced security
+     *
+     * Session Usage:
+     * - Stores Keycloak authentication state
+     * - Maintains user session across requests
+     * - Required even for stateless JWT authentication (keycloak-connect requirement)
+     *
+     * Required: YES - Essential for keycloak-connect middleware
+     */
+    KEYCLOAK_SESSION_SECRET: z.string(),
 
     /**
      * Backend Service Tokens
@@ -1207,6 +1453,20 @@ export const circuitBreakerConfiguration = {
     monitoringPeriod: env.CIRCUIT_BREAKER_MONITORING_PERIOD as number,
     halfOpenMaxCalls: env.CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS as number,
     minimumCalls: env.CIRCUIT_BREAKER_MINIMUM_CALLS as number,
+}
+
+/**
+ * Keycloak Configuration
+ * */
+export const keycloakConfiguration = {
+    realm: env.KEYCLOAK_REALM as string,
+    url: env.KEYCLOAK_URL as string,
+    clientId: env.KEYCLOAK_CLIENT_ID as string,
+    sslRequired: env.KEYCLOAK_SSL_REQUIRED as string,
+    publicClient: env.KEYCLOAK_PUBLIC_CLIENT as boolean,
+    confidentialPort: env.KEYCLOAK_CONFIDENTIAL_PORT as number,
+    allowUnauthenticated: env.KEYCLOAK_ALLOW_UNAUTHENTICATED as boolean,
+    sessionSecret: env.KEYCLOAK_SESSION_SECRET as string,
 }
 
 /**
