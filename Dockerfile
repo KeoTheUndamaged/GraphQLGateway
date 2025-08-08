@@ -5,7 +5,7 @@
 # ===================
 # STAGE 1: Build Stage
 # ===================
-FROM node:22-bookworm AS builder
+FROM node:24-bookworm AS builder
 
 # Set working directory
 WORKDIR /app
@@ -36,7 +36,7 @@ RUN npm run build && \
 # ===================
 # STAGE 2: Production
 # ===================
-FROM node:22-alpine AS production
+FROM node:24-alpine AS production
 
 # Set working directory
 WORKDIR /app
