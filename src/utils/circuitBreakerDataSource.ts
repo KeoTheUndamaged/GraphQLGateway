@@ -1,7 +1,7 @@
 import { RemoteGraphQLDataSource } from '@apollo/gateway';
 import { circuitBreakerManager } from '../managers/circuitBreakerManager';
 import { createLogger } from '../managers/loggerManager';
-import { serverConfiguration } from '../managers/environmentManager';
+import {circuitBreakerConfiguration, serverConfiguration} from '../managers/environmentManager';
 
 /**
  * Custom Error Classes for Circuit Breaker Data Source
@@ -92,9 +92,9 @@ export class CircuitBreakerDataSource extends RemoteGraphQLDataSource {
                  * - Shorter recovery timeout for responsive service restoration
                  * - Conservative test request count to minimise the load during recovery
                  */
-                failureThreshold: 5,      // Trip after 5 consecutive infrastructure failures
-                recoveryTimeout: 30000,   // Wait 30 seconds before testing recovery
-                halfOpenMaxCalls: 3       // Allow 3 test requests during the recovery phase
+                failureThreshold: circuitBreakerConfiguration.failureThreshold, // Trip after consecutive infrastructure failures
+                recoveryTimeout: circuitBreakerConfiguration.recoveryTimeout,   // Wait before testing recovery
+                halfOpenMaxCalls: circuitBreakerConfiguration.halfOpenMaxCalls  // Allowed retries during the recovery phase
             }
         );
     }

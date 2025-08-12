@@ -22,7 +22,7 @@ directive @link(url: String, as: String, for: link__Purpose, import: [link__Impo
 scalar join__FieldSet
 
 enum join__Graph {
-  PRODUCTS @join__graph(name: "products", url: "http://localhost:8081/graphql")
+  PRODUCTS @join__graph(name: "products", url: "http://localhost:8443/graphql")
 }
 
 scalar link__Import
@@ -40,18 +40,31 @@ enum link__Purpose {
 }
 
 type Product
-  @join__type(graph: PRODUCTS, key: "id")
+  @join__type(graph: PRODUCTS)
 {
   id: ID!
   sku: String!
   name: String!
   description: String
-  price: Float!
+}
+
+input ProductInput
+  @join__type(graph: PRODUCTS)
+{
+  id: ID
+  sku: String
+}
+
+input ProductsInput
+  @join__type(graph: PRODUCTS)
+{
+  id: [ID]
+  sku: [String]
 }
 
 type Query
   @join__type(graph: PRODUCTS)
 {
-  products: [Product!]!
-  product(id: ID!): Product!
+  product(input: ProductInput!): Product!
+  products(input: ProductsInput!): [Product]
 }

@@ -36,8 +36,13 @@ import healthcheckHandler from './handlers/healthcheck';
 import { createErrorHandler } from './middleware/errorHandlerMiddleware';
 import {keycloak, keycloakAuth, sessionConfig} from './middleware/keycloakMiddleware';
 
+type App = {
+    app: Express
+    apolloServer: ApolloServer
+    telemetryManager: OpenTelemetryManager
+}
 
-export const createApp = async () => {
+export const createApp: () => Promise<App> = async (): Promise<App> => {
     const app: Express = express();
     const logger: Logger = createLogger(serverConfiguration.logLevel);
 
@@ -110,7 +115,7 @@ export const createApp = async () => {
      * Error Handling: File read failures will crash the application at the startup,
      * which is the desired behaviour (fail-fast principle).
      */
-    const supergraphSdl = readFileSync(path.join(__dirname, '../supergraph.graphql'), 'utf-8');
+    const supergraphSdl: string = readFileSync(path.join(__dirname, '../supergraph.graphql'), 'utf-8');
 
     /**
      * Apollo Gateway Initialisation
@@ -662,7 +667,7 @@ export const createApp = async () => {
  * - Error handling: Prevents silent failures in production
  * - Logging: Comprehensive startup and shutdown logging
  */
-export const startServer = async (): Promise<void> => {
+export const startServer: () => Promise<void> = async (): Promise<void> => {
     const logger = createLogger(serverConfiguration.logLevel);
     let telemetryManager: OpenTelemetryManager | null = null;
     try {

@@ -3,6 +3,6 @@ subgraphs:
   products:
     routing_url: http://localhost:8081/graphql
     schema:
-        subgraph_url: http://localhost:8081/graphql
-        introspection_headers:
-          x-service-name: graphql-gateway
+      subgraph_url: http://localhost:8081/graphql
+      introspection_headers:
+        x-service-name: graphql-gateway
